@@ -9,7 +9,7 @@
    - Bump VERSION to force a cache refresh after a deploy.
    =================================================== */
 
-const VERSION    = 'v15';
+const VERSION    = 'v22';
 const CACHE_NAME = `mileage-${VERSION}`;
 
 const LANGS = [

@@ -417,7 +417,10 @@
     <!-- ── FOOTER PANEL ── -->
     <footer class="footer" role="contentinfo">
       <p class="safe-travels" data-i18n="footer.tagline">safe travels, friend &#129305;</p>
-      <p class="attribution" data-i18n="footer.privacy">All data is stored in your browser</p>
+      <p class="attribution">
+        <span data-i18n="footer.privacy">All data is stored in your browser</span>
+        &middot; <a href="https://github.com/KAStrack/Driving-Cost-Calculator" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+      </p>
       <p class="attribution">
         Routing by <a href="https://github.com/valhalla/valhalla">Valhalla</a>
         &middot; address suggestions by <a href="https://photon.komoot.io/">Photon</a>
@@ -509,6 +512,91 @@
           >Share</button>
         </div>
         <div class="share-tagline" data-i18n="share.tagline">Take a friend along!</div>
+      </div>
+    </dialog>
+
+    <!-- Custom-vehicle modal — opened from the "Add your own vehicle" button
+         that appears in the car-search dropdown when the user's query has
+         no FE.gov matches. Lets them save a vehicle by name + fuel type +
+         MPG/kWh values. Stored as a normal saved car (id prefixed
+         "custom-" so it doesn't collide with FE.gov numeric ids). -->
+    <dialog class="split-modal custom-vehicle-modal" id="custom-vehicle-modal" aria-labelledby="custom-vehicle-title">
+      <div class="split-modal-content">
+        <button
+          type="button"
+          id="custom-vehicle-close"
+          class="split-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="split-modal-title" id="custom-vehicle-title" data-i18n="custom.title">Add custom vehicle</h2>
+        <form id="custom-vehicle-form" class="custom-vehicle-form">
+          <label class="custom-field">
+            <span data-i18n="custom.name">Name</span>
+            <input type="text" id="custom-vehicle-name" required maxlength="60" autocomplete="off" />
+          </label>
+          <fieldset class="custom-fuel-types">
+            <legend data-i18n="custom.fuelType">Fuel type</legend>
+            <label class="custom-fuel-option">
+              <input type="radio" name="custom-fuel" value="gas" checked />
+              <span data-i18n="fuel.gas">Gas</span>
+            </label>
+            <label class="custom-fuel-option">
+              <input type="radio" name="custom-fuel" value="diesel" />
+              <span data-i18n="fuel.diesel">Diesel</span>
+            </label>
+            <label class="custom-fuel-option">
+              <input type="radio" name="custom-fuel" value="electric" />
+              <span data-i18n="fuel.electric">Electric</span>
+            </label>
+          </fieldset>
+          <div class="custom-eff custom-eff-liquid">
+            <label class="custom-field">
+              <span data-i18n="eff.hwy">Highway</span>
+              <div class="input-with-unit">
+                <input id="custom-vehicle-mpg-hwy" type="number" inputmode="decimal" min="0.1" step="0.1" />
+                <span class="input-unit" id="custom-mpg-unit-hwy">MPG</span>
+              </div>
+            </label>
+            <label class="custom-field">
+              <span data-i18n="eff.city">City</span>
+              <div class="input-with-unit">
+                <input id="custom-vehicle-mpg-city" type="number" inputmode="decimal" min="0.1" step="0.1" />
+                <span class="input-unit" id="custom-mpg-unit-city">MPG</span>
+              </div>
+            </label>
+          </div>
+          <div class="custom-eff custom-eff-electric" hidden>
+            <label class="custom-field">
+              <span data-i18n="eff.hwy">Highway</span>
+              <div class="input-with-unit">
+                <input id="custom-vehicle-kwh-hwy" type="number" inputmode="decimal" min="0.1" step="0.1" />
+                <span class="input-unit" id="custom-kwh-unit-hwy">kWh/100mi</span>
+              </div>
+            </label>
+            <label class="custom-field">
+              <span data-i18n="eff.city">City</span>
+              <div class="input-with-unit">
+                <input id="custom-vehicle-kwh-city" type="number" inputmode="decimal" min="0.1" step="0.1" />
+                <span class="input-unit" id="custom-kwh-unit-city">kWh/100mi</span>
+              </div>
+            </label>
+          </div>
+          <div class="install-actions">
+            <button
+              type="button"
+              id="custom-vehicle-cancel"
+              class="share-action share-action-secondary"
+              data-i18n="custom.cancel"
+            >Cancel</button>
+            <button
+              type="submit"
+              id="custom-vehicle-submit"
+              class="share-action"
+              data-i18n="custom.add"
+            >Add</button>
+          </div>
+        </form>
       </div>
     </dialog>
 

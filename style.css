@@ -536,6 +536,51 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
   color: var(--cream);
 }
 
+/* No-results panel inside the car-search dropdown — shown when the typed
+   query has no FE.gov matches. Italicised note plus a button that opens
+   the custom-vehicle modal. */
+.autocomplete-empty {
+  padding: 10px 12px;
+  cursor: default;
+  list-style: none;
+}
+
+.autocomplete-empty-msg {
+  display: block;
+  font-style: italic;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--cream-dim);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.autocomplete-empty-action {
+  display: inline-block;
+  background: transparent;
+  border: 1px solid rgba(224, 112, 64, 0.5);
+  border-radius: 6px;
+  color: var(--terra-light);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.autocomplete-empty-action:hover {
+  background: rgba(192, 83, 42, 0.18);
+  color: var(--cream);
+}
+
+.autocomplete-empty-action:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
 /* ===== PRIMARY + RESULT ROW =====
    Distance input on the left (30%), estimated cost on the right (70%),
    sharing one horizontal band so a mobile keyboard popping up over the
@@ -1144,6 +1189,96 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
   gap: 8px;
   margin-top: 14px;
 }
+
+/* Custom-vehicle modal — same shell as split/share/install via dual class.
+   Form is a vertical stack of labelled fields; fuel-type radios are
+   inline; the MPG and kWh field pairs share their own grid and toggle
+   visibility based on the selected fuel type. */
+.custom-vehicle-modal { width: 360px; }
+
+.custom-vehicle-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.custom-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.custom-field > span,
+.custom-fuel-types > legend {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--label);
+  padding: 0;
+}
+
+.custom-field input[type="text"] {
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-field input[type="text"]:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-color: var(--terra-light);
+}
+
+.custom-fuel-types {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.custom-fuel-types > legend { margin-bottom: 8px; }
+
+.custom-fuel-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--cream);
+  margin-right: 14px;
+}
+
+.custom-fuel-option input[type="radio"] {
+  accent-color: var(--terra-light);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.custom-fuel-option input[type="radio"]:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.custom-eff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.custom-eff[hidden] { display: none; }
+
+.custom-eff .input-with-unit input { font-size: 1rem; padding: 6px 6px 6px 10px; }
 
 /* Live cost comparison across saved cars (>= 2). One small line per
    car, wraps to multiple lines if there are many. Threshold colours

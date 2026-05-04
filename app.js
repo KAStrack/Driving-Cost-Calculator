@@ -755,6 +755,31 @@ function displayToKwhPer100Mi(displayed, distanceUnit) {
   return distanceUnit === 'km' ? displayed * KM_PER_MILE : displayed;
 }
 
+// ── Currency-aware price formatting ───────────────
+// USD has 2 fraction digits, JPY has 0, BHD has 3, etc. Pad an input
+// value to at least the active currency's standard precision so a user
+// who types "4.2" sees "4.20", but preserve any extra precision they
+// typed (electric rates often want 3 — "$0.187/kWh" should not
+// truncate to "$0.19").
+function currencyFractionDigits(currency) {
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency })
+      .resolvedOptions().minimumFractionDigits;
+  } catch {
+    return 2;
+  }
+}
+function padPriceForCurrency(value, currency) {
+  const str = String(value ?? '');
+  if (str === '') return '';
+  const num = parseFloat(str);
+  if (!Number.isFinite(num)) return str;
+  const minDigits   = currencyFractionDigits(currency);
+  const dotIdx      = str.indexOf('.');
+  const typedDigits = dotIdx >= 0 ? str.length - dotIdx - 1 : 0;
+  return num.toFixed(Math.max(minDigits, typedDigits));
+}
+
 // ═══════════════════════════════════════════════════
 // DOM REFS
 // ═══════════════════════════════════════════════════
@@ -824,6 +849,9 @@ const carListEl      = document.getElementById('car-list');
 const carClearEl     = document.getElementById('car-clear');
 const carStatusEl    = document.getElementById('car-status');
 const savedCarsEl    = document.getElementById('saved-cars');
+const customVehicleModalEl = document.getElementById('custom-vehicle-modal');
+const customVehicleFormEl  = document.getElementById('custom-vehicle-form');
+const customVehicleNameEl  = document.getElementById('custom-vehicle-name');
 
 // Most recent successful route's one-way distance, in km. Used so toggling
 // the "one way" checkbox can re-derive the displayed distance without
@@ -2195,8 +2223,34 @@ function hideCarList() {
 }
 
 function renderCarList(items) {
-  if (!items.length) { hideCarList(); return; }
-  carListEl.innerHTML = '';
+  while (carListEl.firstChild) carListEl.removeChild(carListEl.firstChild);
+  if (!items.length) {
+    // FE.gov is US-only and only covers vehicles that submitted economy
+    // testing — non-US makes (Peugeot, Dacia, Lada, …) and many older /
+    // niche vehicles never appear. Offer to add a custom vehicle instead.
+    const empty = document.createElement('li');
+    empty.className = 'autocomplete-empty';
+    const msg = document.createElement('em');
+    msg.className = 'autocomplete-empty-msg';
+    msg.textContent = t(
+      'car.noResults',
+      'Data is only available for vehicles that report fuel economy testing to the EPA.'
+    );
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'autocomplete-empty-action';
+    btn.textContent = t('car.addCustom', 'Add your own vehicle');
+    // mousedown blur-prevention so clicking the button doesn't blur the
+    // input first (which would re-render and remove the button before
+    // the click registers).
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => openCustomVehicleModal(carInputEl.value.trim()));
+    empty.appendChild(msg);
+    empty.appendChild(btn);
+    carListEl.appendChild(empty);
+    showCarList();
+    return;
+  }
   items.forEach((item, i) => {
     const li = document.createElement('li');
     li.className = 'autocomplete-item';
@@ -2323,13 +2377,27 @@ async function pickCarItem(item) {
 }
 
 function applyMpgFromVehicle(v) {
-  // FE.gov reports MPG (US gallons) for liquid fuels and MPGe (which
-  // FE.gov internally converts via 33.7 kWh/gal) for EVs. Convert
-  // city08/highway08 to whatever metric the user's currently
-  // displaying via the litres/km canonical pipeline.
+  // FE.gov reports MPG (US gallons) for liquid fuels and MPGe for EVs in
+  // the same city08/highway08 fields. Writing MPGe into the MPG inputs
+  // would silently overwrite the user's real liquid-fuel car efficiency
+  // when they click an EV saved-car pill — skip the MPG write for
+  // pure-electric vehicles. PHEVs (category 'other') keep both writes
+  // since their city08/highway08 is genuine gasoline MPG.
   const cur = METRICS[metricSelect.value];
   const distanceUnit = cur.distanceUnit;
-  if (v.city > 0 && v.hwy > 0) {
+  const fuel = fuelCategory(v.fuelType1);
+  // Ensure the picked car's fuel mode is active so its values are
+  // visible in the UI and considered by the highlight/cost logic. PHEVs
+  // (category 'other') default to gas — matches the cost-comparison
+  // fallback. Additive: never removes existing modes.
+  const requiredMode = fuel === 'electric' ? 'electric'
+                     : fuel === 'diesel'   ? 'diesel'
+                     : 'gas';
+  const modes = currentPriceModes();
+  if (!modes.includes(requiredMode)) {
+    applyPriceModes([...modes, requiredMode], { save: true });
+  }
+  if (v.city > 0 && v.hwy > 0 && fuel !== 'electric') {
     const cityVal = +cur.fromLitresPerKm(METRICS.mpg_us.toLitresPerKm(v.city)).toFixed(1);
     const hwyVal  = +cur.fromLitresPerKm(METRICS.mpg_us.toLitresPerKm(v.hwy)).toFixed(1);
     effHwyInput.value  = hwyVal;
@@ -2393,17 +2461,49 @@ function removeSavedCar(id) {
 function matchingSavedCars() {
   const cars = getSavedCars();
   if (!cars.length) return [];
-  const cityVal = parseFloat(effCityInput.value);
-  const hwyVal  = parseFloat(effHwyInput.value);
-  if (!(cityVal > 0) || !(hwyVal > 0)) return [];
+  const cityVal     = parseFloat(effCityInput.value);
+  const hwyVal      = parseFloat(effHwyInput.value);
+  const evCityVal   = parseFloat(evEffCityInput.value);
+  const evHwyVal    = parseFloat(evEffHwyInput.value);
+  const hasLiquidIn = cityVal > 0 && hwyVal > 0;
+  const hasKwhIn    = evCityVal > 0 && evHwyVal > 0;
+  if (!hasLiquidIn && !hasKwhIn) return [];
   const cur = METRICS[metricSelect.value];
-  const toDisplay = mpgUs =>
+  const distanceUnit = cur.distanceUnit;
+  const toDisplayMpg = mpgUs =>
     +cur.fromLitresPerKm(METRICS.mpg_us.toLitresPerKm(mpgUs)).toFixed(1);
   const EPS = 0.05;
-  return cars.filter(c =>
-    Math.abs(toDisplay(c.city) - cityVal) < EPS &&
-    Math.abs(toDisplay(c.hwy)  - hwyVal)  < EPS
-  );
+  // Pure EVs store MPGe in city/hwy — those don't correspond to the user's
+  // MPG input, so only their kWh axis is comparable. PHEVs (category
+  // 'other') have real MPG and real kWh; both must match. Liquid-only
+  // cars have no kWh data; only MPG matters. Each axis is also gated
+  // on the matching price mode being active: a diesel car's stored MPG
+  // is per *diesel* gallon, so it isn't comparable to a gas-MPG input —
+  // require 'diesel' mode for a diesel car to be eligible (and 'gas'
+  // for gas/PHEV, 'electric' for kWh).
+  const modes = currentPriceModes();
+  return cars.filter(c => {
+    const fuel = fuelCategory(c.fuelType1);
+    const liquidModeActive = fuel === 'diesel'
+      ? modes.includes('diesel')
+      : modes.includes('gas');
+    const carHasMpg = c.city > 0 && c.hwy > 0 && fuel !== 'electric' && liquidModeActive;
+    const carHasKwh = c.kwhCity > 0 && c.kwhHwy > 0 && modes.includes('electric');
+    if (!carHasMpg && !carHasKwh) return false;
+    if (carHasMpg) {
+      if (!hasLiquidIn) return false;
+      if (Math.abs(toDisplayMpg(c.city) - cityVal) >= EPS) return false;
+      if (Math.abs(toDisplayMpg(c.hwy)  - hwyVal)  >= EPS) return false;
+    }
+    if (carHasKwh) {
+      if (!hasKwhIn) return false;
+      const carKwhCity = kwhPer100MiToDisplay(c.kwhCity, distanceUnit);
+      const carKwhHwy  = kwhPer100MiToDisplay(c.kwhHwy,  distanceUnit);
+      if (Math.abs(carKwhCity - evCityVal) >= EPS) return false;
+      if (Math.abs(carKwhHwy  - evHwyVal)  >= EPS) return false;
+    }
+    return true;
+  });
 }
 
 function renderSavedCars() {
@@ -2447,19 +2547,21 @@ function renderSavedCars() {
       wrap.appendChild(warn);
     }
 
+    const labelParts = [car.year, car.make, car.model].filter(v => v != null && v !== '');
+    const label = labelParts.join(' ');
+    const titleParts = [...labelParts, car.trim].filter(v => v != null && v !== '');
     const pick = document.createElement('button');
     pick.type = 'button';
     pick.className = 'saved-car-pick';
-    pick.textContent = `${car.year} ${car.make} ${car.model}`;
-    pick.title = `${car.year} ${car.make} ${car.model} – ${car.trim}`;
+    pick.textContent = label;
+    pick.title = titleParts.join(' ');
     pick.addEventListener('click', () => applySavedCar(car));
 
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.className = 'saved-car-remove';
     rm.textContent = '×';
-    rm.setAttribute('aria-label',
-      `${t('car.remove', 'Remove')} – ${car.year} ${car.make} ${car.model}`);
+    rm.setAttribute('aria-label', `${t('car.remove', 'Remove')} – ${label}`);
     rm.addEventListener('click', e => {
       e.stopPropagation();
       removeSavedCar(car.id);
@@ -2489,10 +2591,111 @@ function applySavedCar(car) {
   setCarPlaceholder();
   setCarStatus('');
   renderCarChips();
-  // applyMpgFromVehicle dispatches `input` on the efficiency inputs, which
-  // triggers calculate(), savePrefs(), and renderSavedCars (the last
-  // refreshes the is-active highlight to land on this car).
-  applyMpgFromVehicle({ city: car.city, hwy: car.hwy });
+  applyMpgFromVehicle({
+    city:      car.city,
+    hwy:       car.hwy,
+    kwhCity:   car.kwhCity,
+    kwhHwy:    car.kwhHwy,
+    fuelType1: car.fuelType1,
+  });
+}
+
+// ── Custom vehicle modal ──────────────────────────
+function getCustomFuelType() {
+  const checked = customVehicleFormEl.querySelector('input[name="custom-fuel"]:checked');
+  return checked ? checked.value : 'gas';
+}
+
+function updateCustomEffVisibility() {
+  const fuel = getCustomFuelType();
+  customVehicleFormEl.querySelector('.custom-eff-liquid').hidden   = fuel === 'electric';
+  customVehicleFormEl.querySelector('.custom-eff-electric').hidden = fuel !== 'electric';
+}
+
+// Mirror the active-metric units into the modal so the user types in the
+// same MPG/L-per-100km/kWh-per-100km unit they see everywhere else.
+function syncCustomVehicleUnits() {
+  const liquidLabel = effUnitHwy.textContent;
+  const evLabel     = evUnitHwy.textContent;
+  document.getElementById('custom-mpg-unit-hwy').textContent  = liquidLabel;
+  document.getElementById('custom-mpg-unit-city').textContent = liquidLabel;
+  document.getElementById('custom-kwh-unit-hwy').textContent  = evLabel;
+  document.getElementById('custom-kwh-unit-city').textContent = evLabel;
+}
+
+function openCustomVehicleModal(prefill) {
+  customVehicleFormEl.reset();
+  customVehicleNameEl.value = prefill || '';
+  syncCustomVehicleUnits();
+  updateCustomEffVisibility();
+  if (typeof customVehicleModalEl.showModal === 'function') {
+    customVehicleModalEl.showModal();
+  } else {
+    customVehicleModalEl.setAttribute('open', '');
+  }
+  customVehicleNameEl.focus();
+  customVehicleNameEl.select();
+}
+
+function closeCustomVehicleModal() {
+  if (typeof customVehicleModalEl.close === 'function') {
+    customVehicleModalEl.close();
+  } else {
+    customVehicleModalEl.removeAttribute('open');
+  }
+}
+
+function submitCustomVehicle(e) {
+  e.preventDefault();
+  const name = customVehicleNameEl.value.trim();
+  if (!name) { customVehicleNameEl.focus(); return; }
+  const fuel = getCustomFuelType();
+  const cur  = METRICS[metricSelect.value];
+  const distanceUnit = cur.distanceUnit;
+
+  const car = {
+    id:              `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    year:            null,
+    make:            '',
+    model:           name,
+    trim:            null,
+    city:            null,
+    hwy:             null,
+    kwhCity:         null,
+    kwhHwy:          null,
+    fuelType1:       fuel === 'diesel'   ? 'Diesel'
+                   : fuel === 'electric' ? 'Electricity'
+                                         : 'Regular Gasoline',
+    passengerVolume: null,
+  };
+
+  if (fuel === 'electric') {
+    const kwhHwy  = parseFloat(document.getElementById('custom-vehicle-kwh-hwy').value);
+    const kwhCity = parseFloat(document.getElementById('custom-vehicle-kwh-city').value);
+    if (!(kwhHwy > 0) || !(kwhCity > 0)) {
+      document.getElementById('custom-vehicle-kwh-hwy').focus();
+      return;
+    }
+    car.kwhHwy  = displayToKwhPer100Mi(kwhHwy,  distanceUnit);
+    car.kwhCity = displayToKwhPer100Mi(kwhCity, distanceUnit);
+  } else {
+    const effHwy  = parseFloat(document.getElementById('custom-vehicle-mpg-hwy').value);
+    const effCity = parseFloat(document.getElementById('custom-vehicle-mpg-city').value);
+    if (!(effHwy > 0) || !(effCity > 0)) {
+      document.getElementById('custom-vehicle-mpg-hwy').focus();
+      return;
+    }
+    // Canonicalise the user's displayed-metric value to MPG-US (matches
+    // FE.gov's stored shape, lets the rest of the codebase stay metric-
+    // agnostic).
+    car.hwy  = METRICS.mpg_us.fromLitresPerKm(cur.toLitresPerKm(effHwy));
+    car.city = METRICS.mpg_us.fromLitresPerKm(cur.toLitresPerKm(effCity));
+  }
+
+  saveSavedCar(car);
+  closeCustomVehicleModal();
+  resetCarLookup();
+  applyMpgFromVehicle(car);
 }
 
 // Reset everything except the input value — used when the user is mid-typing
@@ -2553,6 +2756,10 @@ async function onRegionChange(saveAfter = true) {
     dieselPriceInput.value  = region.defaultDieselPrice ?? region.defaultGasPrice;
     electricRateInput.value = region.defaultElectricRate ?? 0.18;
   }
+  // Re-pad to the new region's currency precision regardless — both for
+  // the just-loaded defaults and for previously-typed values whose
+  // currency may have just changed.
+  formatPriceInputs(region.currency);
 
   updateSliderDisplay();
   calculate();
@@ -2674,6 +2881,7 @@ async function init() {
   })();
   dieselPriceInput.value  = prefs.dieselPrice ?? dieselDefault;
   electricRateInput.value = prefs.electricRate ?? region.defaultElectricRate ?? 0.18;
+  formatPriceInputs(region.currency);
   // EV efficiency defaults: ~28 kWh/100mi hwy, ~32 kWh/100mi city
   // (typical mid-size EV). Stored values are already in display units
   // (kWh/100mi or kWh/100km); on metric change we convert as needed.
@@ -2812,6 +3020,30 @@ electricRateInput.addEventListener('input', () => {
   refreshStalePrompt();
   renderSavedCars();
   updateShareUrl();
+});
+
+// Pad displayed price values to the region's currency precision when the
+// user finishes editing (blur / Enter). The 'input' listeners above
+// already saved every keystroke; here we sync the displayed + saved
+// value to the padded form (e.g. "4.2" → "4.20" for USD).
+function formatPriceInputs(currency) {
+  if (!currency) return;
+  if (gasPriceInput.value)     gasPriceInput.value     = padPriceForCurrency(gasPriceInput.value,     currency);
+  if (dieselPriceInput.value)  dieselPriceInput.value  = padPriceForCurrency(dieselPriceInput.value,  currency);
+  if (electricRateInput.value) electricRateInput.value = padPriceForCurrency(electricRateInput.value, currency);
+}
+[
+  [gasPriceInput,     'gasPrice'],
+  [dieselPriceInput,  'dieselPrice'],
+  [electricRateInput, 'electricRate'],
+].forEach(([input, key]) => {
+  input.addEventListener('change', () => {
+    const region = REGIONS[regionSelect.value];
+    if (!region || !input.value) return;
+    input.value = padPriceForCurrency(input.value, region.currency);
+    savePrefs({ [key]: input.value });
+    updateShareUrl();
+  });
 });
 
 [evEffHwyInput, evEffCityInput].forEach(el => {
@@ -2979,6 +3211,18 @@ splitLinkEl.addEventListener('click', openSplitModal);
 splitCloseEl.addEventListener('click', () => splitModalEl.close());
 splitModalEl.addEventListener('click', e => {
   if (e.target === splitModalEl) splitModalEl.close();
+});
+
+// Custom-vehicle modal — opened from the no-results panel in the car
+// search dropdown. Same backdrop-close pattern as the other modals.
+document.getElementById('custom-vehicle-close').addEventListener('click', closeCustomVehicleModal);
+document.getElementById('custom-vehicle-cancel').addEventListener('click', closeCustomVehicleModal);
+customVehicleFormEl.addEventListener('submit', submitCustomVehicle);
+customVehicleFormEl.querySelectorAll('input[name="custom-fuel"]').forEach(r => {
+  r.addEventListener('change', updateCustomEffVisibility);
+});
+customVehicleModalEl.addEventListener('click', e => {
+  if (e.target === customVehicleModalEl) closeCustomVehicleModal();
 });
 
 routeButtonEl.addEventListener('click', planRoute);
