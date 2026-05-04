@@ -1,0 +1,1934 @@
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/*
+  WCAG 2.1 Level AA — all contrast ratios verified
+  Text (4.5:1 normal / 3:1 large):
+    #f2e8d5 on panel  #151009 → 15.57:1 ✓   #d4c9b0 on panel → 11.51:1 ✓
+    #f2e8d5 on card   #151210 → 15.21:1 ✓   #a09070 on card  →  5.97:1 ✓
+    #998870 on card           →  5.43:1 ✓   #c8b898 on card  →  9.56:1 ✓
+    #b8a888 on panel          →  8.10:1 ✓   #c8b898 on panel →  9.70:1 ✓
+    #7ec87e on card           →  9.28:1 ✓   #e8b840 on card  → 10.09:1 ✓
+    #e05050 on card           →  4.83:1 ✓   #8ab4e8 on card  →  8.68:1 ✓
+    #e07040 on card           →  5.83:1 ✓
+  Non-text UI (3:1):
+    slider track #7a6a4a on card → 3.54:1 ✓
+    focus ring   #e07040 on card → 5.83:1 ✓
+    input border #a09070 on bg   → 6.20:1 ✓
+    select border #a09070        → 6.20:1 ✓
+*/
+
+:root {
+  --cream:        #f2e8d5;
+  --cream-dim:    #d4c9b0;
+  --terracotta:   #c0532a;
+  --terra-light:  #e07040;
+  --card-bg:      rgba(18, 14, 10, 0.82);
+  --panel-bg:     rgba(15, 11, 7, 0.88);
+  --card-border:  rgba(160, 144, 112, 0.22);
+  --input-bg:     rgba(10, 8, 5, 0.70);
+  --input-border: #a09070;
+  --muted:        #998870;
+  --label:        #a09070;
+  --breakdown:    #a09070;
+  --slider-track: #7a6a4a;
+  --divider:      rgba(160, 144, 112, 0.18);
+  --green:        #7ec87e;
+  --amber:        #e8b840;
+  --red:          #e05050;
+  /* Fuel-type accents — used to tint saved-car pills and the
+     cost-comparison row so the same car visually links across the two.
+     Gas reuses the terracotta accent; diesel takes the green pump
+     convention; "other" (EV, hybrid, alt fuel) uses amber as a
+     "we're guessing — using gas price as a fallback" hint. */
+  --fuel-gas:      #e07040;
+  --fuel-diesel:   #7ec87e;
+  --fuel-electric: #6db8e8;
+  --fuel-other:    #e8b840;
+  --radius:       14px;
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-head:    'Bebas Neue', sans-serif;
+  --font-body:    'Lato', sans-serif;
+  --font-mono:    'Share Tech Mono', monospace;
+}
+
+html { font-size: 16px; }
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  font-family: var(--font-body);
+  color: var(--cream);
+  background: #1a1208;
+}
+
+/* ===== PROGRESSIVE BACKGROUND ===== */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center 40%;
+  background-repeat: no-repeat;
+  z-index: 0;
+  transition: opacity 0.8s ease;
+}
+
+.bg-placeholder {
+  opacity: 1;
+  filter: brightness(0.5) saturate(0.15) sepia(0.5);
+}
+
+.bg-full {
+  opacity: 0;
+  /* Desaturated to near-monochrome, then warm sepia tint pulls it into
+     the UI's terracotta/cream palette. mix-blend-mode on the overlay
+     does the final colour wash. */
+  filter: brightness(0.5) saturate(0.12) sepia(0.55);
+}
+
+.bg-full.loaded { opacity: 1; }
+
+.bg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  /* Warm terracotta colour wash + vignette in one layer.
+     The multiply-style tint is approximated with a semi-transparent
+     warm tone laid over the already-sepia'd image. */
+  background:
+    radial-gradient(
+      ellipse 85% 75% at 50% 45%,
+      rgba(42, 24, 8, 0.35) 0%,
+      rgba(20, 10, 3, 0.72) 100%
+    );
+}
+
+/* ===== WRAPPER ===== */
+.wrapper {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 500px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Vertical breathing room on short viewports */
+  margin: 24px auto;
+}
+
+/* ===== HEADER PANEL ===== */
+.hero {
+  text-align: center;
+  padding: 20px 28px 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--cream);
+  letter-spacing: -0.01em;
+  /* "How Far" sits on its own line, large */
+  font-size: clamp(2.6rem, 10vw, 4rem);
+}
+
+.title-em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--terra-light);
+  display: block;
+  /* Large enough to feel related to "How Far", just shy of wrapping */
+  font-size: clamp(1.5rem, 6.5vw, 2.6rem);
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+}
+
+.subtitle {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.93rem;
+  color: var(--cream-dim);
+  margin-top: 6px;
+  letter-spacing: 0.03em;
+}
+
+/* ===== SETTINGS BAR ===== */
+.settings-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.settings-field label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);          /* 5.43:1 ✓ */
+}
+
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-wrap select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border); /* 6.20:1 non-text ✓ */
+  border-radius: 8px;
+  color: var(--cream);          /* 15.21:1 ✓ */
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 400;
+  /* Explicit line-height keeps both selects the same height regardless
+     of content — the Region select's flag emojis would otherwise render
+     a taller line box than the Metric select's plain ASCII. */
+  line-height: 1.4;
+  padding: 7px 30px 7px 10px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.select-wrap select:focus-visible {
+  outline: 3px solid var(--terra-light); /* 5.83:1 ✓ */
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Dark option styling (best-effort — browsers vary) */
+.select-wrap select option {
+  background: #1e1810;
+  color: var(--cream);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  font-size: 0.6rem;
+  color: var(--label);
+  pointer-events: none;
+}
+
+/* ===== MAIN CARD ===== */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.04) inset;
+  /* No overflow:hidden — the autocomplete dropdowns need to extend past the
+     card. position+z-index lift the card's stacking context above the
+     settings-bar and footer that follow it in source order, so the car
+     dropdown (z-index 20 inside this context) doesn't get hidden behind
+     them. */
+  position: relative;
+  z-index: 10;
+}
+
+/* ===== ROUTE ZONE ===== */
+.route-zone {
+  padding: 18px 28px 14px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.route-heading {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--muted);          /* 5.43:1 ✓ */
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  /* When the heading is a <summary> (collapsible Calculate-by-route): */
+  cursor: pointer;
+  user-select: none;
+  list-style: none;             /* hide default marker — Firefox / Chrome */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-heading::-webkit-details-marker { display: none; } /* Safari */
+
+.route-heading::before {
+  content: '›';
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--label);
+  width: 0.7em;
+  text-align: center;
+  transition: transform 0.18s ease;
+}
+
+details[open] > .route-heading::before { transform: rotate(90deg); }
+
+.route-heading:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.route-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.route-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.route-field label {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--label);          /* 5.97:1 ✓ */
+  text-transform: uppercase;
+}
+
+.route-input {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--cream);
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  transition: outline 0.15s;
+}
+
+.route-input::placeholder { color: rgba(242,232,213,0.32); }
+
+.route-input:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Multi-stop route: dynamic stack of destination inputs, each with a
+   small × to remove (only visible when there are 2+ destinations). */
+.route-destinations {
+  display: grid;
+  gap: 8px;
+}
+
+.autocomplete-with-remove {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.autocomplete-with-remove > .autocomplete { flex: 1; min-width: 0; }
+
+.route-destination-remove {
+  background: transparent;
+  border: none;
+  color: var(--label);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 8px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.route-destination-remove:hover { color: var(--terra-light); }
+.route-destination-remove:focus-visible {
+  color: var(--terra-light);
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* "+ Add stop" — same family as the Split link / labels, terra-light at
+   rest, underline only on hover. */
+.route-add-stop {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--terra-light);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.route-add-stop:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.route-add-stop:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.route-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.one-way-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cream-dim);     /* 11.51:1 ✓ */
+  cursor: pointer;
+  user-select: none;
+  min-height: 44px;            /* WCAG 2.5.5 target size */
+  padding: 4px 0;
+}
+
+.one-way-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+
+.one-way-toggle:focus-within {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.one-way-toggle:has(input:disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.one-way-toggle:has(input:disabled) input { cursor: not-allowed; }
+
+.route-button {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: var(--terracotta);
+  border: 1.5px solid var(--terracotta);
+  border-radius: 8px;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  min-height: 44px;             /* WCAG 2.5.5 target size */
+  flex-shrink: 0;
+}
+
+.route-button:hover { background: var(--terra-light); border-color: var(--terra-light); }
+.route-button:active { transform: scale(0.98); }
+
+.route-button:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
+.route-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.route-status {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 4px;
+  min-height: 1em;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.route-status.is-error { color: var(--red); }
+
+/* Autocomplete dropdown (Photon) */
+.autocomplete { position: relative; }
+
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+}
+
+.autocomplete-item {
+  padding: 8px 12px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--cream-dim);     /* 11.51:1 ✓ */
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.autocomplete-item + .autocomplete-item {
+  border-top: 1px solid var(--divider);
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.is-active {
+  background: rgba(192, 83, 42, 0.28); /* terracotta wash */
+  color: var(--cream);
+}
+
+/* ===== PRIMARY + RESULT ROW =====
+   Distance input on the left (30%), estimated cost on the right (70%),
+   sharing one horizontal band so a mobile keyboard popping up over the
+   lower half doesn't hide the result. A 3×2 grid keeps everything in
+   the same column aligned by virtue of layout: row 1 = labels,
+   row 2 = big numbers (baseline-aligned), row 3 = the small links. */
+.primary-result-row {
+  display: grid;
+  grid-template-columns: 3fr 7fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: baseline;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--divider);
+  background: rgba(0,0,0,0.2);
+}
+
+.primary-result-row > .result-label,
+.primary-result-row > .split-link {
+  justify-self: end;
+}
+
+/* Big cost number — full-cell-width block (so fitResultValue can measure
+   the available space), text right-aligned. */
+.primary-result-row > .result-numbers { text-align: right; }
+
+.big-label {
+  display: block;
+  /* Match .result-label exactly so "Distance" and "Estimate" share a
+     baseline in the grid's first row. */
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--label);          /* 5.97:1 ✓ */
+}
+
+.miles-input-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.miles-input {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 11vw, 4.4rem);
+  color: var(--cream);
+  background: transparent;
+  border: none;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  appearance: none;
+  -moz-appearance: textfield;
+  caret-color: var(--terra-light);
+}
+
+.miles-input::-webkit-inner-spin-button,
+.miles-input::-webkit-outer-spin-button { display: none; }
+.miles-input::placeholder { color: rgba(242,232,213,0.2); }
+
+.miles-input:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.miles-unit {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  color: var(--label);
+  flex-shrink: 0;
+  letter-spacing: 0.06em;
+  min-width: 2.5ch;
+}
+
+/* ===== HIGHWAY ZONE ===== */
+.highway-zone {
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slider-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.slider-center-label {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: #c8b898;               /* 9.56:1 ✓ */
+  text-transform: uppercase;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--slider-track); /* 3.54:1 non-text ✓ */
+  outline: none;
+  cursor: pointer;
+  border: none;
+}
+
+.slider:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cream);
+  cursor: pointer;
+  border: 3px solid var(--terracotta); /* 3.83:1 non-text ✓ */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.slider::-webkit-slider-thumb:hover,
+.slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background: var(--terra-light);
+}
+
+.slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cream);
+  cursor: pointer;
+  border: 3px solid var(--terracotta);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.slider-readout {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.slash { color: var(--muted); }
+#city-pct-display { color: #8ab4e8; }
+#hwy-pct-display  { color: var(--terra-light); }
+
+
+.result-label {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.result-numbers {
+  /* Width-anchor for fitResultValue's parent.clientWidth. min-width:0
+     overrides the grid item default of `min-width: auto` (= content
+     min-content size), which would otherwise let the 7fr track grow
+     past its share to fit the longest unbroken result text. Without
+     it, the track silently expands to fit, scrollWidth never exceeds
+     clientWidth, and fitResultValue's "needs shrinking" check is
+     always false — most visible in 'both' mode where the cost text
+     is roughly twice as wide as a single price. */
+  width: 100%;
+  min-width: 0;
+}
+
+/* The Split link (cost-side) and the OSM link (distance-side) share the
+   same visual contract — small label-style text in terra-light with a
+   tiny "open in new" icon, underline only on hover. */
+.split-link, .osm-link, .share-link {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--terra-light);    /* 5.83:1 ✓ */
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;        /* override <a>'s default underline on .osm-link */
+}
+
+/* row-gap (4px) + this margin = ~10px under the big number, matching the
+   previous flex-column layout. Only direct grid-row-3 children get this;
+   .split-link and .share-link sit inside .result-actions which already
+   has it, so they shouldn't double-up. */
+.primary-result-row > .osm-link,
+.primary-result-row > .result-actions { margin-top: 6px; }
+
+.result-actions {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-self: end;
+}
+
+/* Static · between Share and Split. Sized to match the link labels and
+   coloured the same terracotta accent. Aria-hidden in the markup since
+   it's purely decorative. The :has() rule below visibility:hidden's it
+   when its only purpose (separating from Split) goes away. */
+.result-actions-sep {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--terra-light);
+  user-select: none;
+}
+
+.result-actions:has(.split-link[hidden]) .result-actions-sep {
+  visibility: hidden;
+}
+
+/* `display: inline-flex` above overrides the UA stylesheet's
+   `[hidden] { display: none }`, so we re-honour the attribute here.
+   Use `visibility: hidden` instead of `display: none` so the slot keeps
+   its space in the grid row — without this, hiding one link (e.g.
+   View route) shifts the position of its sibling (Split). visibility
+   also disables clicks and tab focus on the hidden element. */
+.split-link[hidden], .osm-link[hidden], .share-link[hidden] { visibility: hidden; }
+
+.split-link:hover > span, .osm-link:hover > span, .share-link:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.split-link:focus-visible, .osm-link:focus-visible, .share-link:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.split-link-icon { flex-shrink: 0; }
+
+
+/* ===== SPLIT MODAL ===== */
+/* The <dialog> itself has no padding/background, so any click that lands on
+   it is on the backdrop — which lets us close on outside-click cleanly.
+   `inset: 0; margin: auto` centres the dialog both axes regardless of
+   browser UA defaults (Chrome stretches it, Firefox top-aligns it). */
+.split-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--cream);
+  max-width: 92vw;
+  width: 320px;
+  height: fit-content;
+}
+
+.split-modal::backdrop {
+  background: rgba(8, 5, 2, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.split-modal-content {
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 20px 22px 22px;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+
+.split-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--label);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.split-close:hover         { color: var(--terra-light); }
+.split-close:focus-visible {
+  color: var(--terra-light);
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.split-modal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  color: var(--cream);
+  margin: 0 0 14px;
+}
+
+.split-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.split-table th,
+.split-table td {
+  padding: 8px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--divider);
+}
+
+.split-table th:last-child,
+.split-table td:last-child { text-align: right; }
+
+/* Left-pad the first column so the static "2/3/4/5" sit on the same
+   X as the *content* of the custom-row input (input padding 8px + border
+   1.5px ≈ 10px). The input cell overrides padding-left back to 0 so the
+   input itself lands at the cell's left edge. */
+.split-table th:first-child,
+.split-table td:first-child { padding-left: 10px; }
+.split-table td.split-input-cell { padding-left: 0; }
+
+.split-table tr:last-child td { border-bottom: none; }
+
+/* Tagline row — colspan'd, centred, no row separator. The
+   `.split-table` ancestor selector lifts specificity above the generic
+   `.split-table td` rule that follows (same specificity = later wins,
+   which would otherwise clobber the colour). */
+.split-table .split-fun td {
+  text-align: center !important;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  color: var(--terra-light);
+  padding-top: 16px;
+  padding-bottom: 4px;
+  border-bottom: none;
+}
+
+.split-table th {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.split-table td {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--cream);
+}
+
+.split-table input[type="number"] {
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  padding: 4px 8px;
+  width: 80px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.split-table input[type="number"]::-webkit-inner-spin-button,
+.split-table input[type="number"]::-webkit-outer-spin-button { display: none; }
+
+.split-table input[type="number"]:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
+.split-modal[open] { animation: split-modal-in 0.18s ease-out; }
+@keyframes split-modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ===== SHARE MODAL =====
+   Shares structure with .split-modal — same dialog/backdrop/title/close
+   styles via dual selectors above. The pieces below are share-specific:
+   the URL textarea, the action buttons, and the tagline. */
+.share-modal { width: 380px; }
+
+.share-url {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 8px 10px;
+  resize: none;
+  outline: none;
+  word-break: break-all;
+}
+
+.share-url:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
+.share-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.share-action {
+  flex: 1;
+  background: var(--terra);
+  border: 1.5px solid var(--terra);
+  border-radius: 6px;
+  color: var(--cream);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.share-action:hover {
+  background: var(--terra-light);
+  border-color: var(--terra-light);
+}
+
+.share-action:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
+.share-action-secondary {
+  background: transparent;
+  color: var(--terra-light);
+}
+
+.share-action-secondary:hover {
+  background: rgba(224, 112, 64, 0.12);
+  color: var(--terra-light);
+}
+
+.share-action.share-action-copied {
+  background: var(--ok, #5e8c4f);
+  border-color: var(--ok, #5e8c4f);
+  color: var(--cream);
+}
+
+.share-tagline {
+  text-align: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  color: var(--terra-light);
+  margin-top: 14px;
+}
+
+/* ===== INSTALL NUDGE =====
+   Discreet banner sitting between the settings bar and the footer.
+   Stays hidden until beforeinstallprompt fires AND the user hasn't
+   dismissed it before. Click anywhere on the action area opens
+   .install-modal. The × button silently dismisses for good. */
+.install-banner {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  margin: 14px auto 0;
+  max-width: 520px;
+  padding: 0 12px;
+}
+
+.install-banner[hidden] { display: none; }
+
+.install-banner-action {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(192, 83, 42, 0.14);
+  border: 1px solid rgba(224, 112, 64, 0.35);
+  border-radius: 8px 0 0 8px;
+  border-right: none;
+  padding: 8px 14px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--terra-light);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.install-banner-action:hover {
+  background: rgba(192, 83, 42, 0.24);
+  color: var(--cream);
+}
+
+.install-banner-action:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 8px 0 0 8px;
+  z-index: 1;
+}
+
+.install-banner-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.install-banner-dismiss {
+  background: transparent;
+  border: 1px solid rgba(224, 112, 64, 0.35);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  color: var(--label);
+  padding: 0 12px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.install-banner-dismiss:hover { color: var(--terra-light); background: rgba(192, 83, 42, 0.14); }
+.install-banner-dismiss:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Install modal — same shell as the split/share modals via dual class.
+   The bullet list and action row are install-specific. */
+.install-modal { width: 380px; }
+
+.install-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.install-points li {
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--cream);
+  padding: 8px 0 8px 24px;
+  position: relative;
+  border-bottom: 1px solid var(--divider);
+}
+
+.install-points li:last-child { border-bottom: none; }
+
+.install-points li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  color: var(--terra-light);
+  font-weight: 700;
+}
+
+.install-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* Live cost comparison across saved cars (>= 2). One small line per
+   car, wraps to multiple lines if there are many. Threshold colours
+   match .result-value (green / amber / red). */
+.cost-comparison {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--divider);
+  background: rgba(0, 0, 0, 0.12);
+  align-items: baseline;
+}
+
+.cost-comparison[hidden] { display: none; }
+
+.cost-comparison-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  /* Subtle left bar in the fuel-type colour — links a row entry back
+     to its matching pill above. Defaults to gas; .is-fuel-* overrides. */
+  border-left: 2px solid var(--fuel-gas);
+  padding-left: 6px;
+}
+
+.cost-comparison-item.is-fuel-diesel   { border-left-color: var(--fuel-diesel); }
+.cost-comparison-item.is-fuel-electric { border-left-color: var(--fuel-electric); }
+.cost-comparison-item.is-fuel-other    { border-left-color: var(--fuel-other); }
+
+/* For "other" cars, dim the cost slightly so it doesn't read as
+   confidently as a true match. The left-border colour already
+   communicates "we're guessing"; the dim reinforces it. */
+.cost-comparison-item.is-fuel-other .cost-comparison-cost { opacity: 0.78; }
+
+.cost-comparison-name {
+  color: var(--cream-dim);     /* 11.51:1 ✓ */
+  font-family: var(--font-body);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.cost-comparison-cost {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--green);          /* 9.28:1 ✓ */
+}
+
+.cost-comparison-cost.is-mid  { color: var(--amber); } /* 10.09:1 ✓ */
+.cost-comparison-cost.is-high { color: var(--red); }   /* 4.83:1 ✓ */
+/* Dash shown when the user hasn't entered the rate this car needs
+   (e.g. an EV with no electric rate filled in). Muted so it reads
+   as "data missing" rather than a real value. */
+.cost-comparison-cost.is-missing-rate {
+  color: var(--label);
+  font-weight: 400;
+}
+
+.result-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  /* Bigger now that the breakdown lives beside it instead of beneath. */
+  font-size: clamp(2rem, 11vw, 4.4rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--green);
+  transition: color 0.35s ease;
+  white-space: nowrap;
+}
+
+.result-value.is-mid  { color: var(--amber); }
+.result-value.is-high { color: var(--red); }
+
+/* Three-fuel result layout: electric cost is rendered in normal flow
+   so it owns the layout (height, baseline, intrinsic width — same as
+   single-fuel mode). The liquid stack is absolute-positioned to its
+   left so it adds NOTHING to the layout box: no extra height, no
+   baseline shift, no row-height growth. This is the only way to
+   guarantee 3-fuel mode renders at the same vertical metrics as
+   single-fuel — flex/inline-flex baselines proved unreliable across
+   the stack of grid + IFC interactions. */
+.result-value.is-three-fuels {
+  /* Block-level (default for div) — keeps it out of the parent's
+     inline formatting context, so no line-height strut is added.
+     `width: fit-content` shrinks the box to the electric span's
+     width so `right: 100%` on the absolutely-positioned liquids
+     resolves to electric's left edge (not the cell's right edge).
+     `margin-left: auto` then right-aligns the box within the cell. */
+  position: relative;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.result-value.is-three-fuels .result-electric {
+  display: inline;
+}
+
+.result-value.is-three-fuels .result-liquids {
+  /* Out of flow. Anchored to the right side of the line box, just
+     left of the electric span via right:100%, then nudged with the
+     gap. Vertically centered against the electric span. */
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0.25em;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.5em;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.result-value.is-three-fuels .result-electric {
+  /* Inherits the parent's full font-size and threshold colour. */
+}
+
+/* Each cost span carries its own threshold class so the user can see
+   per-fuel "cheap / medium / expensive" at a glance. The parent
+   .result-value's threshold rules above no longer drive the colour
+   when spans are used (existing rules left intact for safety, since
+   inner span colours override inheritance regardless). */
+.result-value .result-cost          { color: var(--green); }
+.result-value .result-cost.is-mid   { color: var(--amber); }
+.result-value .result-cost.is-high  { color: var(--red); }
+
+.result-value .result-cost-sep {
+  color: var(--label);
+  margin: 0 0.05em;
+  font-weight: 400;
+}
+
+/* The estimated volume now lives in the result-label header line, not in
+   a separate column beside the cost. */
+#result-volume:not(:empty) { margin-left: 0.4em; }
+
+/* ===== SECONDARY SECTION ===== */
+.secondary-section { border-top: 1px solid var(--divider); }
+
+.secondary-header {
+  padding: 12px 28px 0;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.secondary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px 28px 22px;
+  gap: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 4px 0;
+}
+
+/* Right-column fields — every odd position from 3 onward (City MPG,
+   City kWh). Pattern instead of single child so the EV row inherits
+   the same alignment as the liquid row above it. */
+.field:nth-child(2n+3) { padding-right: 0; padding-left: 10px; }
+.field-wide { grid-column: 1 / -1; padding-left: 0; padding-right: 0; }
+
+/* Liquid (MPG) inputs hide when no liquid fuel is active; EV (kWh)
+   inputs hide when Electric isn't active. The general-sibling
+   selectors target the eff fields downstream of fuel-price-zone in
+   the secondary-grid. */
+.fuel-price-zone:not(.has-mode-gas):not(.has-mode-diesel) ~ .liquid-eff-field { display: none; }
+.fuel-price-zone:not(.has-mode-electric) ~ .ev-eff-field { display: none; }
+
+/* ===== CAR LOOKUP (FuelEconomy.gov) ===== */
+.car-lookup {
+  padding: 0 28px 18px;
+}
+
+.car-heading {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);          /* 5.43:1 ✓ */
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.car-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.car-chips:not(:empty) { margin-bottom: 8px; }
+
+.car-chip {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  background: rgba(192, 83, 42, 0.32); /* terracotta wash */
+  color: var(--cream);
+  border: none;
+  border-radius: 99px;
+  cursor: pointer;
+  animation: car-chip-in 0.18s ease-out;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.car-chip:hover         { background: rgba(192, 83, 42, 0.55); }
+.car-chip:active        { transform: scale(0.96); }
+.car-chip:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  background: rgba(192, 83, 42, 0.55);
+}
+
+.car-chip-sep {
+  color: var(--label);          /* 5.97:1 ✓ */
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@keyframes car-chip-in {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.car-input-wrap {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  transition: outline 0.15s;
+}
+
+.car-input-wrap:focus-within {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.car-input {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  background: transparent;
+  border: none;
+  color: var(--cream);
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.car-input::placeholder { color: rgba(242, 232, 213, 0.32); }
+.car-input:disabled      { color: var(--cream-dim); cursor: default; }
+
+.car-clear {
+  background: transparent;
+  border: none;
+  color: var(--label);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 14px;
+  align-self: stretch;
+  min-width: 36px;
+}
+
+.car-clear:hover         { color: var(--terra-light); }
+.car-clear:focus-visible {
+  color: var(--terra-light);
+  outline: 2px solid var(--terra-light);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.car-status {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 4px;
+  min-height: 1em;
+  letter-spacing: 0.04em;
+}
+
+.car-status.is-error { color: var(--red); }
+
+/* Saved cars — list of previously chosen vehicles. Click the label to
+   re-apply that car's MPG; click the × to remove from the list. The
+   one whose MPG matches the current Highway/City inputs is highlighted. */
+.saved-cars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.saved-cars[hidden] { display: none; }
+
+.saved-car {
+  display: inline-flex;
+  align-items: stretch;
+  background: rgba(192, 83, 42, 0.18);
+  border-radius: 99px;
+  overflow: hidden;
+  transition: background 0.15s, box-shadow 0.15s;
+  /* Default to gas tint — overridden by .is-fuel-diesel / .is-fuel-other
+     so the pill colour matches what we'll show in the cost-comparison
+     row beneath. */
+  --pill-fuel: var(--fuel-gas);
+}
+
+.saved-car.is-fuel-diesel {
+  background: rgba(126, 200, 126, 0.16);
+  --pill-fuel: var(--fuel-diesel);
+}
+
+.saved-car.is-fuel-electric {
+  background: rgba(109, 184, 232, 0.16);
+  --pill-fuel: var(--fuel-electric);
+}
+
+.saved-car.is-fuel-other {
+  background: rgba(232, 184, 64, 0.14);
+  --pill-fuel: var(--fuel-other);
+}
+
+.saved-car.is-active {
+  background: color-mix(in srgb, var(--pill-fuel) 38%, transparent);
+  box-shadow: 0 0 0 1px var(--pill-fuel);
+}
+
+/* Small ⚠ glyph in front of "other" pills, signalling "we don't have a
+   matching pump price for this vehicle — using gas as a fallback". */
+.saved-car-fuel-warn {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1;
+  padding-left: 8px;
+  color: var(--fuel-other);
+  align-self: center;
+  pointer-events: none;
+}
+
+.saved-car-pick {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 4px 4px 4px 12px;
+  background: transparent;
+  border: none;
+  color: var(--cream);          /* on terracotta wash → high contrast */
+  cursor: pointer;
+}
+
+.saved-car-pick:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 99px;
+}
+
+.saved-car-remove {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--label);
+  cursor: pointer;
+  padding: 0 10px 0 4px;
+  align-self: stretch;
+}
+
+.saved-car-remove:hover { color: var(--terra-light); }
+.saved-car-remove:focus-visible {
+  color: var(--terra-light);
+  outline: 2px solid var(--terra-light);
+  outline-offset: -1px;
+  border-radius: 99px;
+}
+
+/* Placeholder pill while the FE.gov vehicle fetch is in flight. */
+.saved-car-pending-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  min-width: 6ch;
+  /* Match the line-height-driven height of a normal saved-car pill. */
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.saved-car-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(242, 232, 213, 0.3);
+  border-top-color: var(--cream);
+  border-radius: 50%;
+  animation: saved-car-spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes saved-car-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+.field label {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--label);
+  text-transform: uppercase;
+}
+
+/* Tiny "↻ update?" affordance shown after ~30 days of fuel-price
+   inactivity. Sits inline next to the field label, terracotta-tinted
+   so it draws the eye without dominating. Clicking focuses + selects
+   the price input; entering a new value clears the prompt. */
+.stale-prompt {
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: none;
+  color: var(--terra-light);
+  cursor: pointer;
+  font-style: italic;
+}
+
+.stale-prompt:hover { text-decoration: underline; text-underline-offset: 2px; }
+.stale-prompt:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Input + inline unit badge */
+.input-with-unit {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--input-bg);
+  transition: outline 0.15s;
+}
+
+.input-with-unit:focus-within {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.input-with-unit input {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  background: transparent;
+  border: none;
+  color: var(--cream);
+  padding: 8px 8px 8px 12px;
+  outline: none;
+  width: 100%;
+  -moz-appearance: textfield;
+  min-width: 0;
+}
+
+.input-with-unit input::-webkit-inner-spin-button,
+.input-with-unit input::-webkit-outer-spin-button { display: none; }
+
+.input-unit {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cream);          /* on terracotta bg → white, high contrast */
+  background: var(--terracotta);
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(255,255,255,0.15);
+  min-width: 44px;              /* WCAG 2.5.5 target size */
+  justify-content: center;
+}
+
+/* Narrow portrait phones: the right-side .input-unit badge eats most of
+   the input's width, hiding all but the first digit of typed MPG values.
+   Restack the unit as a full-width strip beneath the input and give the
+   input itself a touch more vertical breathing room. */
+@media (max-width: 480px) and (orientation: portrait) {
+  .input-with-unit {
+    flex-direction: column;
+  }
+  .input-with-unit input {
+    padding: 12px;
+    text-align: left;
+  }
+  .input-with-unit .input-unit {
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding: 5px 9px;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* Gas price: prefix + input + suffix */
+/* ===== Fuel-price zone (gas + diesel + mode picker) ===== */
+.fuel-price-zone .fuel-price-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.fuel-price-label {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--label);
+  text-transform: uppercase;
+}
+
+.price-mode-picker {
+  display: inline-flex;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.price-mode-option {
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--input-border);
+  padding: 4px 10px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--label);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.price-mode-option:first-child { border-left: none; }
+.price-mode-option:hover { color: var(--cream); }
+.price-mode-option[aria-pressed="true"] {
+  background: rgba(224, 112, 64, 0.18);
+  color: var(--terra-light);
+}
+.price-mode-option:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+}
+
+/* Layout: each fuel-input slot is shown/hidden by the .has-mode-* class
+   on the zone (multi-select). The grid columns adapt: 1 column when
+   one fuel active, 2 when two, 3 when all three. display:none on
+   hidden inputs reflows the visible ones to full width. */
+.fuel-price-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.fuel-price-zone:not(.has-mode-gas)      .fuel-input-gas,
+.fuel-price-zone:not(.has-mode-diesel)   .fuel-input-diesel,
+.fuel-price-zone:not(.has-mode-electric) .fuel-input-electric {
+  display: none;
+}
+
+/* Two of three active → 2 columns. */
+.fuel-price-zone.has-mode-gas.has-mode-diesel:not(.has-mode-electric)    .fuel-price-row,
+.fuel-price-zone.has-mode-gas.has-mode-electric:not(.has-mode-diesel)    .fuel-price-row,
+.fuel-price-zone.has-mode-diesel.has-mode-electric:not(.has-mode-gas)    .fuel-price-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* All three active → 3 columns. */
+.fuel-price-zone.has-mode-gas.has-mode-diesel.has-mode-electric .fuel-price-row {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Sub-label inside each input (Gas / Diesel / Electric) shown only when
+   2+ inputs are visible — single-fuel mode makes the active fuel
+   obvious from the outer label + picker. The stale prompt sits inline. */
+.fuel-input-sublabel {
+  display: none;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: var(--label);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.fuel-price-zone.has-mode-gas.has-mode-diesel  .fuel-input-sublabel,
+.fuel-price-zone.has-mode-gas.has-mode-electric .fuel-input-sublabel,
+.fuel-price-zone.has-mode-diesel.has-mode-electric .fuel-input-sublabel {
+  display: inline-block;
+}
+
+/* Tint each input's border so the user can see at a glance which is
+   gas, diesel, or electric — matches the colour on the pill / cost row. */
+.fuel-input-gas      .prefix-wrap { border-color: var(--fuel-gas); }
+.fuel-input-diesel   .prefix-wrap { border-color: var(--fuel-diesel); }
+.fuel-input-electric .prefix-wrap { border-color: var(--fuel-electric); }
+
+/* In single-fuel mode keep the standard input border — the colour cue
+   is redundant when there's only one input visible. */
+.fuel-price-zone:not(.has-mode-diesel):not(.has-mode-electric) .fuel-input-gas .prefix-wrap,
+.fuel-price-zone:not(.has-mode-gas):not(.has-mode-electric)    .fuel-input-diesel .prefix-wrap,
+.fuel-price-zone:not(.has-mode-gas):not(.has-mode-diesel)      .fuel-input-electric .prefix-wrap {
+  border-color: var(--input-border);
+}
+
+.prefix-wrap {
+  display: flex;
+  align-items: stretch;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: outline 0.15s;
+}
+
+.prefix-wrap:focus-within {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.prefix {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--label);
+  padding: 8px 6px 8px 12px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.prefix-wrap input {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  background: transparent;
+  border: none;
+  color: var(--cream);
+  padding: 8px 4px;
+  outline: none;
+  width: 100%;
+  -moz-appearance: textfield;
+  min-width: 0;
+}
+
+.prefix-wrap input::-webkit-inner-spin-button,
+.prefix-wrap input::-webkit-outer-spin-button { display: none; }
+
+.suffix {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--label);
+  padding: 8px 12px 8px 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ===== FOOTER PANEL ===== */
+.footer {
+  text-align: center;
+  padding: 14px 28px;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.safe-travels {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--cream-dim);      /* 11.51:1 ✓ */
+  letter-spacing: 0.04em;
+}
+
+.attribution {
+  font-size: 0.68rem;
+  color: #b8a888;               /* 8.10:1 ✓ */
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+.attribution a {
+  color: #c8b898;               /* 9.70:1 ✓ */
+  text-decoration: underline;
+}
+
+.attribution a:hover,
+.attribution a:focus-visible {
+  color: var(--cream);
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Sponsored-by-KAStrack — same shape as kastrack.github.io/kselect.js.
+   Lives as its own wrapper child below the footer; spacing comes from
+   the wrapper's flex gap and the wrapper's own bottom margin. */
+.sponsored-by-kastrack {
+  background: #68996f;
+  max-width: 300px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  border-radius: 20px;
+}
+
+.kastrack-link {
+  text-decoration: none;
+  padding: 15px;
+  width: 100%;
+}
+
+.kastrack-link:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 20px;
+}
+
+.kastrack-logo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  color: #ffffff;
+  font-style: italic;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.kastrack-logo img { max-width: 200px; height: auto; }
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  .bg-layer, .result-value, .slider::-webkit-slider-thumb, .route-button { transition: none; }
+  .route-button:active { transform: none; }
+  .car-chip { animation: none; transition: none; }
+  .car-chip:active { transform: none; }
+  .route-heading::before { transition: none; }
+  .saved-car-spinner { animation: none; opacity: 0.6; }
+  .split-modal[open] { animation: none; }
+}

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Road Trip Cost Calculator</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Bebas+Neue&family=Lato:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="theme-color" content="#c0532a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mileage" />
+</head>
+<body>
+
+  <div class="bg-layer bg-placeholder" id="bg-placeholder" aria-hidden="true"></div>
+  <div class="bg-layer bg-full"        id="bg-full"        aria-hidden="true"></div>
+  <div class="bg-overlay"                                  aria-hidden="true"></div>
+
+  <div class="wrapper">
+
+    <!-- ── HEADER PANEL ── -->
+    <header class="hero" role="banner">
+      <h1 class="title" id="app-title">
+        <span data-i18n="title.plain">How Far</span><span class="title-em" data-i18n="title.em">… and at what cost?</span>
+      </h1>
+      <p class="subtitle" data-i18n="subtitle">Know the damage before you leave the driveway.</p>
+    </header>
+
+    <!-- ── MAIN CARD ── -->
+    <main class="card" id="main-content">
+
+      <!-- Route planner (autofills distance + highway slider) — collapsible -->
+      <details class="route-zone">
+        <summary class="route-heading" data-i18n="route.heading">Calculate distance and highway mix automatically</summary>
+        <div class="route-grid">
+          <div class="route-field">
+            <label for="route-origin">
+              <span data-i18n="route.origin">From</span>
+            </label>
+            <div class="autocomplete">
+              <input
+                id="route-origin"
+                type="text"
+                class="route-input"
+                autocomplete="off"
+                placeholder="City or Zip"
+                data-i18n-placeholder="route.placeholder"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="route-origin-list"
+              />
+              <ul class="autocomplete-list" id="route-origin-list" role="listbox" hidden></ul>
+            </div>
+          </div>
+          <div id="route-destinations" class="route-destinations"></div>
+          <button id="route-add-stop" type="button" class="route-add-stop">
+            <span data-i18n="route.addStop">+ Add stop</span>
+          </button>
+          <div class="route-actions">
+            <label class="one-way-toggle" for="route-one-way">
+              <input type="checkbox" id="route-one-way" />
+              <span data-i18n="route.oneWay">One way</span>
+            </label>
+            <button id="route-calculate" type="button" class="route-button">
+              <span data-i18n="route.calculate">Calculate</span>
+            </button>
+          </div>
+          <p class="route-status" id="route-status" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <!-- Distance + result share one row. A 2×2 grid puts both labels in
+           row 1 and both values in row 2, so labels are aligned by virtue
+           of the layout — no centering / margin gymnastics. On mobile the
+           result stays visible above the keyboard while typing distance. -->
+      <div class="primary-result-row">
+        <label class="big-label" for="distance">
+          <span data-i18n="distance.label">Distance</span>
+        </label>
+        <div class="result-label" id="result-label">
+          <span data-i18n="result.label">Estimate:</span>
+          <span id="result-volume"></span>
+        </div>
+        <div class="miles-input-wrap">
+          <input
+            id="distance"
+            class="miles-input"
+            type="number"
+            inputmode="decimal"
+            min="0"
+            placeholder="0"
+            autocomplete="off"
+            autofocus
+            data-i18n-aria="aria.distance"
+            aria-label="Number of miles to drive"
+          />
+          <span class="miles-unit" id="distance-unit-label" aria-hidden="true">mi</span>
+        </div>
+        <div class="result-numbers">
+          <div
+            class="result-value"
+            id="result"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-labelledby="result-label"
+          >&mdash;</div>
+        </div>
+        <a
+          id="osm-link"
+          class="osm-link"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          hidden
+        ><span data-i18n="route.viewOnMap">View route</span><svg class="split-link-icon" viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 8v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"/><path d="M8 2h4v4M12 2L7 7"/></svg></a>
+        <div class="result-actions">
+          <button
+            type="button"
+            id="share-link"
+            class="share-link"
+            aria-haspopup="dialog"
+          ><span data-i18n="share.link">Share</span><svg class="split-link-icon" viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V2M5 4l2-2 2 2"/><path d="M3 7v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V7"/></svg></button>
+          <span class="result-actions-sep" aria-hidden="true">&middot;</span>
+          <button
+            type="button"
+            id="split-link"
+            class="split-link"
+            aria-haspopup="dialog"
+            hidden
+          ><span data-i18n="split.link">Split</span><svg class="split-link-icon" viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 8v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"/><path d="M8 2h4v4M12 2L7 7"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Live cost comparison across saved cars (>= 2). Hidden when
+           fewer cars or when distance/fuel price are invalid. -->
+      <div id="cost-comparison" class="cost-comparison" hidden></div>
+
+      <!-- Highway mix slider -->
+      <div class="highway-zone">
+        <div class="slider-header" aria-hidden="true">
+          <span class="slider-label" data-i18n="city.slider">City</span>
+          <span class="slider-center-label" data-i18n="highway.mix">Highway Mix</span>
+          <span class="slider-label" data-i18n="highway.slider">Hwy</span>
+        </div>
+        <input
+          id="highway-pct"
+          class="slider"
+          type="range"
+          min="0"
+          max="100"
+          value="60"
+          data-i18n-aria="aria.highway"
+          aria-label="Highway driving percentage"
+          aria-valuetext="60% highway, 40% city"
+        />
+        <div class="slider-readout" aria-hidden="true">
+          <span id="city-pct-display">40%</span>
+          <span class="slash">&nbsp;/&nbsp;</span>
+          <span id="hwy-pct-display">60%</span>
+        </div>
+      </div>
+
+      <!-- Secondary inputs -->
+      <div class="secondary-section">
+        <p class="secondary-header" id="secondary-heading">
+          <span data-i18n="numbers.heading">Your Numbers</span>
+        </p>
+        <div class="secondary-grid" role="group" aria-labelledby="secondary-heading">
+          <div class="field field-wide fuel-price-zone has-mode-gas" id="fuel-price-zone">
+            <div class="fuel-price-header">
+              <span class="fuel-price-label" data-i18n="fuel.price">Fuel Price</span>
+              <div
+                class="price-mode-picker"
+                role="group"
+                data-i18n-aria="fuel.modeAria"
+                aria-label="Show prices for"
+              >
+                <button
+                  type="button"
+                  class="price-mode-option"
+                  data-mode="gas"
+                  aria-pressed="true"
+                  data-i18n="fuel.gas"
+                >Gas</button>
+                <button
+                  type="button"
+                  class="price-mode-option"
+                  data-mode="diesel"
+                  aria-pressed="false"
+                  data-i18n="fuel.diesel"
+                >Diesel</button>
+                <button
+                  type="button"
+                  class="price-mode-option"
+                  data-mode="electric"
+                  aria-pressed="false"
+                  data-i18n="fuel.electric"
+                >Electric</button>
+              </div>
+            </div>
+            <div class="fuel-price-row">
+              <div class="fuel-price-input fuel-input-gas" data-fuel="gas">
+                <label class="fuel-input-sublabel" for="gas-price" data-i18n="fuel.gas">Gas</label>
+                <button
+                  type="button"
+                  id="gas-price-stale"
+                  class="stale-prompt"
+                  hidden
+                ><span aria-hidden="true">↻ </span><span data-i18n="fuel.update">update?</span></button>
+                <div class="prefix-wrap">
+                  <span class="prefix" id="currency-prefix" aria-hidden="true">$</span>
+                  <input id="gas-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="3.89" />
+                  <span class="suffix" id="volume-suffix" aria-hidden="true">/gal</span>
+                </div>
+              </div>
+              <div class="fuel-price-input fuel-input-diesel" data-fuel="diesel">
+                <label class="fuel-input-sublabel" for="diesel-price" data-i18n="fuel.diesel">Diesel</label>
+                <button
+                  type="button"
+                  id="diesel-price-stale"
+                  class="stale-prompt"
+                  hidden
+                ><span aria-hidden="true">↻ </span><span data-i18n="fuel.update">update?</span></button>
+                <div class="prefix-wrap">
+                  <span class="prefix" id="currency-prefix-diesel" aria-hidden="true">$</span>
+                  <input id="diesel-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="4.20" />
+                  <span class="suffix" id="volume-suffix-diesel" aria-hidden="true">/gal</span>
+                </div>
+              </div>
+              <div class="fuel-price-input fuel-input-electric" data-fuel="electric">
+                <label class="fuel-input-sublabel" for="electric-rate" data-i18n="fuel.electric">Electric</label>
+                <button
+                  type="button"
+                  id="electric-rate-stale"
+                  class="stale-prompt"
+                  hidden
+                ><span aria-hidden="true">↻ </span><span data-i18n="fuel.update">update?</span></button>
+                <div class="prefix-wrap">
+                  <span class="prefix" id="currency-prefix-electric" aria-hidden="true">$</span>
+                  <input id="electric-rate" type="number" inputmode="decimal" min="0" step="0.001" placeholder="0.18" />
+                  <span class="suffix" id="volume-suffix-electric" aria-hidden="true">/kWh</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field liquid-eff-field">
+            <label for="efficiency-hwy">
+              <span data-i18n="eff.hwy">Highway</span>
+            </label>
+            <div class="input-with-unit">
+              <input id="efficiency-hwy" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="32" />
+              <span class="input-unit" id="eff-unit-hwy" aria-label="fuel efficiency unit">MPG</span>
+            </div>
+          </div>
+          <div class="field liquid-eff-field">
+            <label for="efficiency-city">
+              <span data-i18n="eff.city">City</span>
+            </label>
+            <div class="input-with-unit">
+              <input id="efficiency-city" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="24" />
+              <span class="input-unit" id="eff-unit-city" aria-hidden="true">MPG</span>
+            </div>
+          </div>
+          <!-- EV efficiency — only visible when Electric mode is active.
+               Unit (kWh/100mi vs kWh/100km) follows the global distance
+               unit; values stored canonically in kWh/100mi. -->
+          <div class="field ev-eff-field">
+            <label for="ev-eff-hwy">
+              <span data-i18n="eff.hwy">Highway</span>
+            </label>
+            <div class="input-with-unit">
+              <input id="ev-eff-hwy" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="28" />
+              <span class="input-unit" id="ev-unit-hwy" aria-hidden="true">kWh/100mi</span>
+            </div>
+          </div>
+          <div class="field ev-eff-field">
+            <label for="ev-eff-city">
+              <span data-i18n="eff.city">City</span>
+            </label>
+            <div class="input-with-unit">
+              <input id="ev-eff-city" type="number" inputmode="decimal" min="0.1" step="0.1" placeholder="32" />
+              <span class="input-unit" id="ev-unit-city" aria-hidden="true">kWh/100mi</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Car lookup → fills MPG fields from FuelEconomy.gov -->
+        <div class="car-lookup">
+          <div class="saved-cars" id="saved-cars" hidden></div>
+          <p class="car-heading" data-i18n="car.heading">Find my car</p>
+          <div class="car-chips" id="car-chips" aria-live="polite"></div>
+          <div class="autocomplete car-input-wrap">
+            <input
+              id="car-input"
+              type="text"
+              class="car-input"
+              autocomplete="off"
+              inputmode="text"
+              placeholder="Year"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="car-list"
+            />
+            <button
+              type="button"
+              id="car-clear"
+              class="car-clear"
+              hidden
+              data-i18n-aria="car.clear"
+              aria-label="Clear">&times;</button>
+            <ul class="autocomplete-list" id="car-list" role="listbox" hidden></ul>
+          </div>
+          <p class="car-status" id="car-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ── REGION / METRIC BAR ── -->
+    <div class="settings-bar" role="region"
+         data-i18n-aria="aria.settings"
+         aria-label="Region and fuel metric settings">
+      <div class="settings-field">
+        <label for="region-select">
+          <span data-i18n="region.label">Region</span>
+        </label>
+        <div class="select-wrap">
+          <select id="region-select">
+            <option value="ar">&#127462;&#127479; Argentina</option>
+            <option value="au">&#127462;&#127482; Australia</option>
+            <option value="br">&#127463;&#127479; Brasil</option>
+            <option value="cn">&#127464;&#127475; &#20013;&#22269;</option>
+            <option value="cz">&#127464;&#127487; Česko</option>
+            <option value="dk">&#127465;&#127472; Danmark</option>
+            <option value="fi">&#127467;&#127470; Suomi</option>
+            <option value="fr">&#127467;&#127479; France</option>
+            <option value="de">&#127465;&#127466; Deutschland</option>
+            <option value="gr">&#127468;&#127479; Ελλάδα</option>
+            <option value="hu">&#127469;&#127482; Magyarország</option>
+            <option value="in">&#127470;&#127475; भारत</option>
+            <option value="id">&#127470;&#127465; Indonesia</option>
+            <option value="it">&#127470;&#127481; Italia</option>
+            <option value="jp">&#127471;&#127477; 日本</option>
+            <option value="mx">&#127474;&#127485; México</option>
+            <option value="nl">&#127475;&#127473; Nederland</option>
+            <option value="nz">&#127475;&#127487; New Zealand</option>
+            <option value="no">&#127475;&#127476; Norge</option>
+            <option value="pl">&#127477;&#127473; Polska</option>
+            <option value="pt">&#127477;&#127481; Portugal</option>
+            <option value="ro">&#127479;&#127476; România</option>
+            <option value="ru">&#127479;&#127482; Россия</option>
+            <option value="sa">&#127480;&#127462; Saudi Arabia</option>
+            <option value="kr">&#127472;&#127479; 한국</option>
+            <option value="es">&#127466;&#127480; España</option>
+            <option value="za">&#127487;&#127462; South Africa</option>
+            <option value="se">&#127480;&#127466; Sverige</option>
+            <option value="tr">&#127481;&#127479; Türkiye</option>
+            <option value="ae">&#127462;&#127466; United Arab Emirates</option>
+            <option value="uk">&#127468;&#127463; United Kingdom</option>
+            <option value="us">&#127482;&#127480; United States</option>
+            <option value="vn">&#127483;&#127475; Việt Nam</option>
+          </select>
+          <span class="select-arrow" aria-hidden="true">&#9660;</span>
+        </div>
+      </div>
+      <div class="settings-field">
+        <label for="metric-select">
+          <span data-i18n="metric.label">Fuel Metric</span>
+        </label>
+        <div class="select-wrap">
+          <select id="metric-select">
+            <option value="mpg_us">MPG (US)</option>
+            <option value="mpg_uk">MPG (UK)</option>
+            <option value="l100km">L/100km</option>
+            <option value="kpl">km/L</option>
+            <option value="kpg_us">km/gal (US)</option>
+          </select>
+          <span class="select-arrow" aria-hidden="true">&#9660;</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INSTALL NUDGE ──
+         Hidden by default; shown only when the browser fires
+         `beforeinstallprompt` and the user hasn't dismissed it before.
+         Click → install-modal explains what'll happen; the modal's
+         Install button calls the stashed prompt() event. -->
+    <div class="install-banner" id="install-banner" hidden>
+      <button
+        type="button"
+        class="install-banner-action"
+        id="install-banner-action"
+      >
+        <span class="install-banner-icon" aria-hidden="true">↓</span>
+        <span data-i18n="install.banner">Install Mileage for offline use</span>
+      </button>
+      <button
+        type="button"
+        class="install-banner-dismiss"
+        id="install-banner-dismiss"
+        data-i18n-aria="install.dismiss"
+        aria-label="Dismiss"
+      >&times;</button>
+    </div>
+
+    <!-- ── FOOTER PANEL ── -->
+    <footer class="footer" role="contentinfo">
+      <p class="safe-travels" data-i18n="footer.tagline">safe travels, friend &#129305;</p>
+      <p class="attribution" data-i18n="footer.privacy">All data is stored in your browser</p>
+      <p class="attribution">
+        Routing by <a href="https://github.com/valhalla/valhalla">Valhalla</a>
+        &middot; address suggestions by <a href="https://photon.komoot.io/">Photon</a>
+        &middot; geocoding by <a href="https://nominatim.openstreetmap.org/">Nominatim</a>
+        &middot; API hosting by <a href="https://www.fossgis.de/">FOSSGIS</a> &amp; <a href="https://www.komoot.com/">Komoot</a>
+        &middot; map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
+        &middot; vehicle MPG by <a href="https://www.fueleconomy.gov/">FuelEconomy.gov</a> (US DOE / EPA)
+      </p>
+      <p class="attribution">Image by <a href="https://pixabay.com/users/noel_bauza-2019050/?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=1197800">Noel Bauza</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=1197800">Pixabay</a></p>
+    </footer>
+
+    <div class="sponsored-by-kastrack">
+      <a href="https://www.kastrack.com" class="kastrack-link" target="_blank" rel="noopener noreferrer">
+        <span class="kastrack-logo">
+          <img src="kastrack.png" alt="KAStrack Logo" />
+          Sponsored by KAStrack
+        </span>
+      </a>
+    </div>
+
+    <!-- Install modal — opened from the install-banner. Explains what
+         "install" does on the user's device (no app store, offline use,
+         data stays local) before triggering the stashed prompt event. -->
+    <dialog class="split-modal install-modal" id="install-modal" aria-labelledby="install-modal-title">
+      <div class="split-modal-content">
+        <button
+          type="button"
+          id="install-close"
+          class="split-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="split-modal-title" id="install-modal-title" data-i18n="install.title">Install Mileage</h2>
+        <ul class="install-points">
+          <li data-i18n="install.benefit1">Works offline — calculate with no connection</li>
+          <li data-i18n="install.benefit2">An icon on your home screen, no app store</li>
+          <li data-i18n="install.benefit3">All your data stays in this browser</li>
+        </ul>
+        <div class="install-actions">
+          <button
+            type="button"
+            id="install-cancel"
+            class="share-action share-action-secondary"
+            data-i18n="install.cancel"
+          >Not now</button>
+          <button
+            type="button"
+            id="install-confirm"
+            class="share-action"
+            data-i18n="install.confirm"
+          >Install</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Share modal — opened from the .share-link beneath the result.
+         Shows the live shareable URL with a Copy button and (when
+         supported) a native Share… button that opens the OS share sheet. -->
+    <dialog class="split-modal share-modal" id="share-modal" aria-labelledby="share-modal-title">
+      <div class="split-modal-content">
+        <button
+          type="button"
+          id="share-close"
+          class="split-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="split-modal-title" id="share-modal-title" data-i18n="share.link">Share</h2>
+        <textarea
+          id="share-url"
+          class="share-url"
+          readonly
+          rows="3"
+          aria-label="Shareable URL"
+        ></textarea>
+        <div class="share-actions">
+          <button
+            type="button"
+            id="share-copy"
+            class="share-action"
+            data-i18n="share.copy"
+          >Copy link</button>
+          <button
+            type="button"
+            id="share-native"
+            class="share-action share-action-secondary"
+            data-i18n="share.link"
+            hidden
+          >Share</button>
+        </div>
+        <div class="share-tagline" data-i18n="share.tagline">Take a friend along!</div>
+      </div>
+    </dialog>
+
+    <!-- Split-cost modal — opened from the .split-link beneath the result -->
+    <dialog class="split-modal" id="split-modal" aria-labelledby="split-title">
+      <div class="split-modal-content">
+        <button
+          type="button"
+          id="split-close"
+          class="split-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="split-modal-title" id="split-title" data-i18n="split.title">Split</h2>
+        <table class="split-table">
+          <thead>
+            <tr>
+              <th data-i18n="split.people">People</th>
+              <th data-i18n="split.perPerson">Per person</th>
+            </tr>
+          </thead>
+          <tbody id="split-tbody"></tbody>
+        </table>
+      </div>
+    </dialog>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

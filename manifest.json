@@ -1,0 +1,21 @@
+{
+  "name": "Mileage — Road Trip Cost Calculator",
+  "short_name": "Mileage",
+  "description": "Calculate fuel cost for any drive — distance, mileage, and fuel price, in your region's units.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#151210",
+  "theme_color": "#c0532a",
+  "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

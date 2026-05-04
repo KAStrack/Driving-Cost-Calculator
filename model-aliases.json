@@ -1,0 +1,8 @@
+[
+  {
+    "make": "Subaru",
+    "pattern": "^(.+) AWD$",
+    "replacement": "$1",
+    "_note": "Every modern Subaru is AWD — the FE.gov suffix is redundant noise in the cost-comparison row."
+  }
+]
