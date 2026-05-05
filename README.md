@@ -48,6 +48,8 @@ The Driving Cost Calculator estimates how much fuel — gas, diesel, electricity
 
 ### Localization
 
+#### NOTE: All regional differences and translations were done by AI. If you notice a mistake, please create a github issue what should be changed.
+
 - **24 languages.** Czech, Danish, Dutch, English, Finnish, French, German, Greek, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian, Polish, Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Vietnamese, and Chinese.
 - **33 regions.** Per-region currency, fuel volume unit (US gallon, UK gallon, or litre), distance unit (mi or km), and number formatting.
 - **5 efficiency metrics.** MPG (US), MPG (UK), L/100km, km/L, and km/gallon.
