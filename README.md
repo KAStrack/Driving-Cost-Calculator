@@ -48,7 +48,7 @@ The Driving Cost Calculator estimates how much fuel — gas, diesel, electricity
 
 ### Localization
 
-#### NOTE: All regional differences and translations were done by AI. If you notice a mistake, please create a github issue what should be changed.
+#### NOTE: All regional differences and translations were done by AI. If you notice a mistake, p. Cars never sold in the US (Peugeot, Dacia, Lada, etc.) won't appear in the lookup; their MPG can still be entered manually.lease create a github issue what should be changed.
 
 - **24 languages.** Czech, Danish, Dutch, English, Finnish, French, German, Greek, Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian, Polish, Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Vietnamese, and Chinese.
 - **33 regions.** Per-region currency, fuel volume unit (US gallon, UK gallon, or litre), distance unit (mi or km), and number formatting.
@@ -79,6 +79,6 @@ Pricing defaults are best-effort 2025 estimates and will drift over time — the
 
 ## Limitations
 
-- **FuelEconomy.gov is US-only.** Cars never sold in the US (Peugeot, Dacia, Lada, etc.) won't appear in the lookup; their MPG can still be entered manually.
+- **FuelEconomy.gov is US-only.** Cars never sold in the US (Peugeot, Dacia, Lada, etc.) or that are exempt from EPA fuel economy testing and reporting won't appear in the lookup; their MPG can still be entered manually. 
 - **PHEVs are approximated.** Plug-in hybrids whose primary fuel is "Premium Gas or Electricity" don't get a per-car cost calculation — we have no honest way to assign a single rate without knowing the trip's battery state — so they fall back to the gas rate with a warning glyph.
 - **Routing is best-effort.** The free community routing services are reliable for normal trips but not production-grade. If a route fails, you can still type a distance manually.
