@@ -122,6 +122,7 @@ body {
 
 /* ===== HEADER PANEL ===== */
 .hero {
+  position: relative;
   text-align: center;
   padding: 20px 28px 18px;
   background: var(--panel-bg);
@@ -130,6 +131,41 @@ body {
   backdrop-filter: blur(20px) saturate(1.1);
   -webkit-backdrop-filter: blur(20px) saturate(1.1);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
+  /* Whole header is one click target for the QR modal — the icon top
+     right is just the visual cue. Pointer cursor surfaces the
+     affordance to mouse users without needing a hover state. */
+  cursor: pointer;
+}
+
+/* Re-emphasise the icon on hover anywhere over the header so it's
+   obvious the QR is what the click does, not some hidden behaviour. */
+.hero:hover .qr-button { color: var(--terra-light); }
+
+/* QR-code button — top-right of the header. Anchored absolutely so
+   the title/subtitle below stay perfectly centred regardless of the
+   button's presence. 40×40 hit area for WCAG 2.5.5 touch targets. */
+.qr-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--label);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.qr-button:hover { color: var(--terra-light); }
+.qr-button:focus-visible {
+  outline: 3px solid var(--terra-light);
+  outline-offset: 2px;
+  color: var(--terra-light);
 }
 
 .title {
@@ -165,7 +201,10 @@ body {
 /* ===== SETTINGS BAR ===== */
 .settings-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Auto-fit lets Region / Language / Metric sit on one row when there's
+     space (~440px+) and gracefully reflow to 2 or 1 columns on narrow
+     screens without a separate media query. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   padding: 14px 18px;
   background: var(--panel-bg);
@@ -1079,6 +1118,100 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
   margin-top: 14px;
 }
 
+/* QR modal — fullscreen takeover so the QR is large enough to scan
+   from a phone held a metre or so from the screen. The card inside
+   uses a cream background so QR contrast is correct (cameras want
+   dark-on-light). Closes on backdrop click and Esc. */
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  background: transparent;
+  color: var(--cream);
+}
+
+.qr-modal::backdrop {
+  background: rgba(8, 5, 2, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.qr-modal-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* The wrapper takes the dialog's initial focus so the × doesn't —
+   suppress any browser default outline on it, since the user never
+   pressed Tab to land here. */
+.qr-modal-content:focus,
+.qr-modal-content:focus-visible { outline: none; }
+
+.qr-modal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  color: var(--cream);
+  text-align: center;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* White card around the QR keeps it scannable — most cameras struggle
+   with QR codes whose quiet-zone is a dark colour. */
+.qr-image-wrap {
+  background: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+
+.qr-image {
+  display: block;
+  width: min(70vmin, 480px);
+  height: min(70vmin, 480px);
+}
+
+.qr-url {
+  font-family: var(--font-mono);
+  font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+  color: var(--cream);
+  text-decoration: underline;
+  text-decoration-color: var(--terra-light);
+  text-underline-offset: 4px;
+  word-break: break-all;
+  text-align: center;
+  max-width: 90vw;
+}
+
+.qr-url:hover { color: var(--terra-light); }
+
+.qr-close {
+  /* Larger hit area than the split-modal × since this is fullscreen
+     and the user's pointer has further to travel. The right-offset
+     gives the focus ring (2px outline + 2px offset = 4px outward)
+     room to render fully on-screen even when the page underneath has
+     a scrollbar that narrows the visible viewport. */
+  top: 14px;
+  right: 24px;
+  font-size: 1.8rem;
+  padding: 8px 14px;
+}
+
 /* ===== INSTALL NUDGE =====
    Discreet banner sitting between the settings bar and the footer.
    Stays hidden until beforeinstallprompt fires AND the user hasn't
@@ -1280,6 +1413,75 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
 
 .custom-eff .input-with-unit input { font-size: 1rem; padding: 6px 6px 6px 10px; }
 
+/* Onboarding modal — first-visit prompt for the user's local fuel
+   prices. Auto-opens when no fuel price is saved; cannot be dismissed
+   until ≥1 input has a value. Three labelled prefix-wrap inputs (one
+   per fuel) tinted to match the main UI's fuel-colour convention so a
+   user who's already seen the app's price-mode picker recognises which
+   row is which. */
+.onboarding-modal { width: 360px; }
+
+.onboarding-intro {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--cream-dim);
+  margin: 0 0 16px;
+}
+
+.onboarding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Region + Language pair sit side-by-side at the top of the form,
+   reusing the .settings-field / .select-wrap styling from the main
+   settings bar so the controls look identical when the user later
+   sees them at the bottom of the page. */
+.onboarding-locale {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+/* Per-fuel border tints so each row reads as that fuel — same
+   convention as .fuel-input-{gas,diesel,electric} in the main UI. */
+.onboarding-field:nth-child(1) .prefix-wrap { border-color: var(--fuel-gas); }
+.onboarding-field:nth-child(2) .prefix-wrap { border-color: var(--fuel-diesel); }
+.onboarding-field:nth-child(3) .prefix-wrap { border-color: var(--fuel-electric); }
+
+.onboarding-actions { margin-top: 8px; }
+
+/* Inline error shown when the user hits Save with every price field
+   blank. Reuses the same red-on-card colour as the route-status
+   error so the visual language stays consistent. */
+.onboarding-error {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--red);
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+.onboarding-error[hidden] { display: none; }
+
 /* Live cost comparison across saved cars (>= 2). One small line per
    car, wraps to multiple lines if there are many. Threshold colours
    match .result-value (green / amber / red). */
@@ -1409,6 +1611,11 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
 .result-value .result-cost          { color: var(--green); }
 .result-value .result-cost.is-mid   { color: var(--amber); }
 .result-value .result-cost.is-high  { color: var(--red); }
+
+/* Mode is active but its price/efficiency input is blank — render the
+   "—" in the same muted colour the cost-comparison row uses, so it
+   reads as "no data" rather than as a real (zero) value. */
+.result-value .result-cost.is-missing-rate { color: var(--label); }
 
 .result-value .result-cost-sep {
   color: var(--label);
@@ -1807,6 +2014,37 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
     min-width: 0;
     width: 100%;
   }
+
+  /* Side-by-side distance/cost overflows on some Android phones when the
+     cost text is long (multi-fuel modes, big numbers in low-value
+     currencies). Stack the cost below the distance so each gets the
+     full row width. Explicit grid-row keeps the label glued to its
+     value group despite the interleaved source order. */
+  .primary-result-row {
+    grid-template-columns: 1fr;
+  }
+  .primary-result-row > .big-label        { grid-row: 1; }
+  .primary-result-row > .miles-input-wrap { grid-row: 2; }
+  .primary-result-row > .osm-link         { grid-row: 3; justify-self: start; }
+  .primary-result-row > .result-label     { grid-row: 4; justify-self: start; margin-top: 18px; }
+  .primary-result-row > .result-numbers   { grid-row: 5; text-align: left; margin-top: 4px; }
+  .primary-result-row > .result-actions   { grid-row: 6; justify-self: start; margin-top: 16px; }
+
+  /* 3-fuel layout normally right-aligns the box (margin-left: auto) and
+     hangs the liquid stack to the LEFT of the electric span (right:100%).
+     With the row stack left-aligned, that would push the liquid stack
+     off-screen to the left — flip both: pin the box to the left, hang
+     the liquid stack to the RIGHT of electric. */
+  .result-value.is-three-fuels {
+    margin-left: 0;
+  }
+  .result-value.is-three-fuels .result-liquids {
+    right: auto;
+    left: 100%;
+    margin-right: 0;
+    margin-left: 0.25em;
+    align-items: flex-start;
+  }
 }
 
 /* Gas price: prefix + input + suffix */
@@ -1889,6 +2127,29 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+/* Narrow-screen caps. Each rule must match the same specificity as the
+   has-mode rules above and sit later in source order to win the tie —
+   that's why these live here rather than in the main 480px block above
+   alongside the .primary-result-row stack. */
+@media (max-width: 480px) and (orientation: portrait) {
+  /* All-three-fuel mode squeezes the inputs to one digit. Cap at 2
+     columns; the third input wraps to a second row. */
+  .fuel-price-zone.has-mode-gas.has-mode-diesel.has-mode-electric .fuel-price-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 360px) and (orientation: portrait) {
+  /* Tightest phones — stack every price input on its own row regardless
+     of how many modes are active. */
+  .fuel-price-zone.has-mode-gas.has-mode-diesel.has-mode-electric         .fuel-price-row,
+  .fuel-price-zone.has-mode-gas.has-mode-diesel:not(.has-mode-electric)   .fuel-price-row,
+  .fuel-price-zone.has-mode-gas.has-mode-electric:not(.has-mode-diesel)   .fuel-price-row,
+  .fuel-price-zone.has-mode-diesel.has-mode-electric:not(.has-mode-gas)   .fuel-price-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Sub-label inside each input (Gas / Diesel / Electric) shown only when
    2+ inputs are visible — single-fuel mode makes the active fuel
    obvious from the outer label + picker. The stale prompt sits inline. */
@@ -1964,6 +2225,12 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
 
 .prefix-wrap input::-webkit-inner-spin-button,
 .prefix-wrap input::-webkit-outer-spin-button { display: none; }
+
+/* Faint enough that a typed value is unmistakable from the placeholder
+   hint, yet still readable as a typing reference. Matches the
+   .miles-input scale rather than the autocomplete inputs (which are
+   slightly more prominent because users do type into them). */
+.prefix-wrap input::placeholder { color: rgba(242,232,213,0.22); }
 
 .suffix {
   font-family: var(--font-body);

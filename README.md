@@ -82,3 +82,4 @@ Pricing defaults are best-effort 2025 estimates and will drift over time — the
 - **FuelEconomy.gov is US-only.** Cars never sold in the US (Peugeot, Dacia, Lada, etc.) or that are exempt from EPA fuel economy testing and reporting won't appear in the lookup; their MPG can still be entered manually. 
 - **PHEVs are approximated.** Plug-in hybrids whose primary fuel is "Premium Gas or Electricity" don't get a per-car cost calculation — we have no honest way to assign a single rate without knowing the trip's battery state — so they fall back to the gas rate with a warning glyph.
 - **Routing is best-effort.** The free community routing services are reliable for normal trips but not production-grade. If a route fails, you can still type a distance manually.
+

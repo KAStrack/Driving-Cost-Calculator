@@ -28,6 +28,21 @@
 
     <!-- ── HEADER PANEL ── -->
     <header class="hero" role="banner">
+      <button
+        type="button"
+        id="qr-button"
+        class="qr-button"
+        aria-haspopup="dialog"
+        data-i18n-aria="qr.open"
+        aria-label="Show QR code"
+      >
+        <svg class="qr-button-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+          <!-- Three corner finders + a couple of cells in the data area —
+               same silhouette as a real QR code at glanceable size. -->
+          <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zm9-2h7v7h-7V3zm2 2v3h3V5h-3zM3 14h7v7H3v-7zm2 2v3h3v-3H5z"/>
+          <path d="M14 14h2v2h-2zm3 0h2v2h-2zm-3 3h2v2h-2zm3 3h2v2h-2zm3-3h-2v-2h2v2zm-2 3h2v-2h-2v2z"/>
+        </svg>
+      </button>
       <h1 class="title" id="app-title">
         <span data-i18n="title.plain">How Far</span><span class="title-em" data-i18n="title.em">… and at what cost?</span>
       </h1>
@@ -375,6 +390,40 @@
         </div>
       </div>
       <div class="settings-field">
+        <label for="language-select">
+          <span data-i18n="language.label">Language</span>
+        </label>
+        <div class="select-wrap">
+          <select id="language-select">
+            <option value="cs">Čeština</option>
+            <option value="da">Dansk</option>
+            <option value="de">Deutsch</option>
+            <option value="el">Ελληνικά</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="fi">Suomi</option>
+            <option value="fr">Français</option>
+            <option value="hi">हिन्दी</option>
+            <option value="hu">Magyar</option>
+            <option value="id">Bahasa Indonesia</option>
+            <option value="it">Italiano</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="nl">Nederlands</option>
+            <option value="no">Norsk</option>
+            <option value="pl">Polski</option>
+            <option value="pt">Português</option>
+            <option value="ro">Română</option>
+            <option value="ru">Русский</option>
+            <option value="sv">Svenska</option>
+            <option value="tr">Türkçe</option>
+            <option value="vi">Tiếng Việt</option>
+            <option value="zh">中文</option>
+          </select>
+          <span class="select-arrow" aria-hidden="true">&#9660;</span>
+        </div>
+      </div>
+      <div class="settings-field">
         <label for="metric-select">
           <span data-i18n="metric.label">Fuel Metric</span>
         </label>
@@ -620,6 +669,108 @@
           </thead>
           <tbody id="split-tbody"></tbody>
         </table>
+      </div>
+    </dialog>
+
+    <!-- QR-code modal — fullscreen overlay opened by the .qr-button in
+         the header. Shows the canonical site URL plus a large QR
+         pointing to it, so a phone can scan from a desktop screen
+         without typing. Closes on backdrop click, ×, or Esc. -->
+    <dialog class="qr-modal" id="qr-modal" aria-labelledby="qr-modal-title">
+      <!-- tabindex+autofocus on the content wrapper hijacks the
+           dialog's initial-focus behaviour so the × doesn't start
+           focused (and thus doesn't show its focus ring on a
+           mouse-driven open). Tab still moves to × normally. -->
+      <div class="qr-modal-content" tabindex="-1" autofocus>
+        <button
+          type="button"
+          id="qr-close"
+          class="split-close qr-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="qr-modal-title" id="qr-modal-title" data-i18n="qr.title">Scan to open on your phone</h2>
+        <div class="qr-image-wrap">
+          <img class="qr-image" src="qr.svg" alt="QR code" />
+        </div>
+        <a class="qr-url" href="https://kastrack.github.io/Driving-Cost-Calculator/" target="_blank" rel="noopener noreferrer">https://kastrack.github.io/Driving-Cost-Calculator/</a>
+      </div>
+    </dialog>
+
+    <!-- Onboarding modal — auto-opened on first visit (no fuel prices
+         saved). Cannot be dismissed until the user enters at least one
+         price. No close button, Esc is intercepted, no backdrop click
+         handler. Submit enables only when ≥1 input has a value > 0. -->
+    <dialog class="split-modal onboarding-modal" id="onboarding-modal" aria-labelledby="onboarding-title">
+      <div class="split-modal-content">
+        <h2 class="split-modal-title" id="onboarding-title" data-i18n="onboarding.title">Welcome</h2>
+        <p class="onboarding-intro" data-i18n="onboarding.intro">In order to calculate your driving costs, we need to know the fuel prices in your area. Please enter only the fuel types are relevant to you — leave the rest blank.</p>
+        <form id="onboarding-form" class="onboarding-form">
+          <!-- Region + Language are pre-selected from the browser's
+               locale guess; the user can correct either before saving.
+               Options are cloned at modal-open from the main settings
+               bar's selects (avoids duplicating the markup). -->
+          <div class="onboarding-locale">
+            <div class="settings-field">
+              <label for="onboarding-region">
+                <span data-i18n="region.label">Region</span>
+              </label>
+              <div class="select-wrap">
+                <select id="onboarding-region"></select>
+                <span class="select-arrow" aria-hidden="true">&#9660;</span>
+              </div>
+            </div>
+            <div class="settings-field">
+              <label for="onboarding-language">
+                <span data-i18n="language.label">Language</span>
+              </label>
+              <div class="select-wrap">
+                <select id="onboarding-language"></select>
+                <span class="select-arrow" aria-hidden="true">&#9660;</span>
+              </div>
+            </div>
+          </div>
+          <label class="onboarding-field">
+            <span class="onboarding-label" data-i18n="fuel.gas">Gas</span>
+            <div class="prefix-wrap">
+              <span class="prefix" id="onboarding-gas-prefix" aria-hidden="true">$</span>
+              <input id="onboarding-gas" type="number" inputmode="decimal" min="0" step="0.01" autocomplete="off" />
+              <span class="suffix" id="onboarding-gas-suffix" aria-hidden="true">/gal</span>
+            </div>
+          </label>
+          <label class="onboarding-field">
+            <span class="onboarding-label" data-i18n="fuel.diesel">Diesel</span>
+            <div class="prefix-wrap">
+              <span class="prefix" id="onboarding-diesel-prefix" aria-hidden="true">$</span>
+              <input id="onboarding-diesel" type="number" inputmode="decimal" min="0" step="0.01" autocomplete="off" />
+              <span class="suffix" id="onboarding-diesel-suffix" aria-hidden="true">/gal</span>
+            </div>
+          </label>
+          <label class="onboarding-field">
+            <span class="onboarding-label" data-i18n="fuel.electric">Electric</span>
+            <div class="prefix-wrap">
+              <span class="prefix" id="onboarding-electric-prefix" aria-hidden="true">$</span>
+              <input id="onboarding-electric" type="number" inputmode="decimal" min="0" step="0.001" autocomplete="off" />
+              <span class="suffix" id="onboarding-electric-suffix" aria-hidden="true">/kWh</span>
+            </div>
+          </label>
+          <p
+            id="onboarding-error"
+            class="onboarding-error"
+            role="alert"
+            aria-live="polite"
+            hidden
+            data-i18n="onboarding.error"
+          >Please enter at least one fuel price.</p>
+          <div class="install-actions onboarding-actions">
+            <button
+              type="submit"
+              id="onboarding-submit"
+              class="share-action"
+              data-i18n="onboarding.save"
+            >Save</button>
+          </div>
+        </form>
       </div>
     </dialog>
 

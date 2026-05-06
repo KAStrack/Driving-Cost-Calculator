@@ -511,6 +511,83 @@ const REGIONS = {
 const langCache   = {};
 const titlesCache = {};
 
+// Supported UI language codes. Independent of region — the user can run
+// the UI in any of these regardless of which region they've picked, so
+// e.g. "live in the US, want the UI in Chinese" works without giving up
+// USD / MPG / US gas-price defaults. Region's `lang` only acts as the
+// initial default until the user explicitly picks one here.
+const LANGUAGES = [
+  'cs','da','de','el','en','es','fi','fr','hi','hu','id','it',
+  'ja','ko','nl','no','pl','pt','ro','ru','sv','tr','vi','zh',
+];
+const LANGUAGES_SET = new Set(LANGUAGES);
+
+// ── Browser-locale detection (first-visit only) ──────
+// On a brand-new visit (no saved prefs.region) we guess a region and
+// language from `navigator.languages` so a French Firefox user from
+// France doesn't have to manually pick "France" out of the dropdown
+// before they see EUR / l/100km / French strings. We avoid Geolocation
+// API entirely — it'd prompt the user for permission, which is overkill
+// for picking a default.
+//
+// Country codes are taken from BCP 47 tags like `fr-FR` or `pt-BR`. We
+// match the country first (more specific signal); if no tag has a
+// country code, we fall back to the language → canonical-region map
+// below so e.g. `zh` alone picks China.
+const COUNTRY_TO_REGION = {
+  ar: 'ar', au: 'au', br: 'br', cn: 'cn', cz: 'cz', dk: 'dk',
+  fi: 'fi', fr: 'fr', de: 'de', gr: 'gr', hu: 'hu', in: 'in',
+  id: 'id', it: 'it', jp: 'jp', mx: 'mx', nl: 'nl', nz: 'nz',
+  no: 'no', pl: 'pl', pt: 'pt', ro: 'ro', ru: 'ru', sa: 'sa',
+  kr: 'kr', es: 'es', za: 'za', se: 'se', tr: 'tr', ae: 'ae',
+  us: 'us', vn: 'vn',
+  // BCP 47 country code for the United Kingdom is GB, but our region
+  // key is `uk`. Accept either; map to `uk`.
+  gb: 'uk', uk: 'uk',
+};
+
+const LANG_TO_REGION = {
+  cs: 'cz', da: 'dk', de: 'de', el: 'gr', en: 'us', es: 'es',
+  fi: 'fi', fr: 'fr', hi: 'in', hu: 'hu', id: 'id', it: 'it',
+  ja: 'jp', ko: 'kr', nl: 'nl', no: 'no', pl: 'pl', pt: 'pt',
+  ro: 'ro', ru: 'ru', sv: 'se', tr: 'tr', vi: 'vn', zh: 'cn',
+};
+
+function browserLocaleTags() {
+  if (Array.isArray(navigator.languages) && navigator.languages.length) {
+    return navigator.languages;
+  }
+  return navigator.language ? [navigator.language] : [];
+}
+
+function detectRegionFromBrowser() {
+  const tags = browserLocaleTags();
+  // Prefer an explicit country code from any preferred tag.
+  for (const tag of tags) {
+    const parts = String(tag).toLowerCase().split('-');
+    for (let i = 1; i < parts.length; i++) {
+      const seg = parts[i];
+      if (seg.length === 2 && COUNTRY_TO_REGION[seg]) return COUNTRY_TO_REGION[seg];
+    }
+  }
+  // No country code anywhere → use the primary language of the first
+  // preferred tag and pick its canonical region.
+  for (const tag of tags) {
+    const lang = String(tag).toLowerCase().split('-')[0];
+    if (LANG_TO_REGION[lang]) return LANG_TO_REGION[lang];
+  }
+  return 'us';
+}
+
+function detectLanguageFromBrowser() {
+  const tags = browserLocaleTags();
+  for (const tag of tags) {
+    const lang = String(tag).toLowerCase().split('-')[0];
+    if (LANGUAGES_SET.has(lang)) return lang;
+  }
+  return 'en';
+}
+
 // Latest applied translation strings — kept so dynamic UI text (route
 // status messages) can look up the same keys the DOM was painted with.
 let currentStrings = {};
@@ -610,6 +687,29 @@ function applyTranslations(strings) {
   // Car-lookup placeholder depends on the current stage, so the static
   // data-i18n-placeholder attribute can't carry it — refresh manually.
   if (typeof setCarPlaceholder === 'function') setCarPlaceholder();
+}
+
+// Resolve the UI language. Explicit `prefs.language` wins (the user
+// picked one); otherwise we fall back to the region's default lang so a
+// first-time user from France still gets French automatically.
+function effectiveLanguage(prefs) {
+  if (prefs && typeof prefs.language === 'string' && LANGUAGES_SET.has(prefs.language)) {
+    return prefs.language;
+  }
+  const region = REGIONS[(prefs && prefs.region) || regionSelect.value];
+  return region ? region.lang : 'en';
+}
+
+// Load + apply a language and pick a fresh random title. Used by both
+// the explicit language picker and the region-change fallback path.
+async function applyLanguage(langCode) {
+  const [strings, titles] = await Promise.all([
+    loadLanguage(langCode),
+    loadTitles(langCode),
+  ]);
+  applyTranslations(strings);
+  applyRandomTitle(titles);
+  document.documentElement.lang = langCode;
 }
 
 // ═══════════════════════════════════════════════════
@@ -785,6 +885,7 @@ function padPriceForCurrency(value, currency) {
 // ═══════════════════════════════════════════════════
 
 const regionSelect   = document.getElementById('region-select');
+const languageSelect = document.getElementById('language-select');
 const metricSelect   = document.getElementById('metric-select');
 const distanceInput  = document.getElementById('distance');
 const distanceUnitEl = document.getElementById('distance-unit-label');
@@ -819,6 +920,9 @@ const splitModalEl   = document.getElementById('split-modal');
 const splitTbodyEl   = document.getElementById('split-tbody');
 const splitCloseEl   = document.getElementById('split-close');
 const shareModalEl   = document.getElementById('share-modal');
+const qrButtonEl     = document.getElementById('qr-button');
+const qrModalEl      = document.getElementById('qr-modal');
+const qrCloseEl      = document.getElementById('qr-close');
 const shareUrlEl     = document.getElementById('share-url');
 const shareCopyEl    = document.getElementById('share-copy');
 const shareNativeEl  = document.getElementById('share-native');
@@ -852,6 +956,21 @@ const savedCarsEl    = document.getElementById('saved-cars');
 const customVehicleModalEl = document.getElementById('custom-vehicle-modal');
 const customVehicleFormEl  = document.getElementById('custom-vehicle-form');
 const customVehicleNameEl  = document.getElementById('custom-vehicle-name');
+const onboardingModalEl    = document.getElementById('onboarding-modal');
+const onboardingFormEl     = document.getElementById('onboarding-form');
+const onboardingRegionEl   = document.getElementById('onboarding-region');
+const onboardingLanguageEl = document.getElementById('onboarding-language');
+const onboardingGasEl      = document.getElementById('onboarding-gas');
+const onboardingDieselEl   = document.getElementById('onboarding-diesel');
+const onboardingElectricEl = document.getElementById('onboarding-electric');
+const onboardingSubmitEl   = document.getElementById('onboarding-submit');
+const onboardingErrorEl    = document.getElementById('onboarding-error');
+const onboardingGasPrefixEl     = document.getElementById('onboarding-gas-prefix');
+const onboardingDieselPrefixEl  = document.getElementById('onboarding-diesel-prefix');
+const onboardingElectricPrefixEl = document.getElementById('onboarding-electric-prefix');
+const onboardingGasSuffixEl     = document.getElementById('onboarding-gas-suffix');
+const onboardingDieselSuffixEl  = document.getElementById('onboarding-diesel-suffix');
+const onboardingElectricSuffixEl = document.getElementById('onboarding-electric-suffix');
 
 // Most recent successful route's one-way distance, in km. Used so toggling
 // the "one way" checkbox can re-derive the displayed distance without
@@ -959,42 +1078,46 @@ function calculate() {
   const electricRate  = parseFloat(electricRateInput.value);
   const modes         = currentPriceModes();
 
-  // Validate per active mode. Liquid modes need MPG inputs + their
-  // price; electric mode needs kWh inputs + electric rate. Common
-  // requirements: distance.
+  // Distance is the only universal requirement. Per-mode inputs
+  // (MPG / kWh / each price) can be blank — the corresponding cost
+  // renders as "—" but other modes still calculate.
   if (isNaN(dist) || dist <= 0) return showInvalidResult();
   const usesLiquid = modes.includes('gas') || modes.includes('diesel');
-  if (usesLiquid && [effHwy, effCity].some(v => isNaN(v) || v <= 0)) return showInvalidResult();
-  if (modes.includes('electric') && [evHwy, evCity].some(v => isNaN(v) || v <= 0)) return showInvalidResult();
-  if (modes.includes('gas')      && (isNaN(gasPrice)     || gasPrice     <= 0)) return showInvalidResult();
-  if (modes.includes('diesel')   && (isNaN(dieselPrice)  || dieselPrice  <= 0)) return showInvalidResult();
-  if (modes.includes('electric') && (isNaN(electricRate) || electricRate <= 0)) return showInvalidResult();
+  const liquidEffOk = effHwy > 0 && effCity > 0;
+  const evEffOk     = evHwy  > 0 && evCity  > 0;
 
   const distKm     = metric.distanceUnit === 'mi' ? dist * KM_PER_MILE : dist;
 
-  // Liquid fuel calc — same lkm canonical as before.
-  const lkmMixed   = usesLiquid
+  // Liquid fuel calc — only meaningful when MPG inputs are filled in.
+  // null bubbles up so missing MPG lights up "—" for both gas + diesel.
+  const lkmMixed   = (usesLiquid && liquidEffOk)
     ? metric.toLitresPerKm(effHwy) * hwyPct + metric.toLitresPerKm(effCity) * cityPct
-    : 0;
-  const litresUsed = distKm * lkmMixed;
-  const gasCost    = litresUsed * VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(gasPrice || 0);
-  const dieselCost = litresUsed * VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(dieselPrice || 0);
+    : null;
+  const litresUsed = lkmMixed !== null ? distKm * lkmMixed : null;
+  const gasCost    = (litresUsed !== null && gasPrice    > 0)
+    ? litresUsed * VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(gasPrice)
+    : null;
+  const dieselCost = (litresUsed !== null && dieselPrice > 0)
+    ? litresUsed * VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(dieselPrice)
+    : null;
 
   // EV calc — kWh inputs are in kWh/100<distanceUnit>; convert to
   // kWh/km canonical, multiply by distKm, multiply by $/kWh.
-  const evKwhPerKmHwy = metric.distanceUnit === 'mi'
-    ? (evHwy || 0) / 100 / KM_PER_MILE
-    : (evHwy || 0) / 100;
-  const evKwhPerKmCity = metric.distanceUnit === 'mi'
-    ? (evCity || 0) / 100 / KM_PER_MILE
-    : (evCity || 0) / 100;
-  const kwhUsed       = distKm * (evKwhPerKmHwy * hwyPct + evKwhPerKmCity * cityPct);
-  const electricCost  = kwhUsed * (electricRate || 0);
+  const kwhUsed       = (modes.includes('electric') && evEffOk)
+    ? distKm * ((metric.distanceUnit === 'mi'
+        ? (evHwy  / 100 / KM_PER_MILE) * hwyPct  + (evCity / 100 / KM_PER_MILE) * cityPct
+        : (evHwy  / 100)               * hwyPct  + (evCity / 100)               * cityPct))
+    : null;
+  const electricCost  = (kwhUsed !== null && electricRate > 0)
+    ? kwhUsed * electricRate
+    : null;
 
   // Build per-mode cost spans with their own threshold colour. Order
   // is canonical: gas, diesel, electric. The threshold class drives
   // the colour (green/amber/red); fuel-specific colour is reserved
-  // for the saved-car pills + cost-comparison row.
+  // for the saved-car pills + cost-comparison row. `cost: null` means
+  // the user hasn't supplied the inputs needed for this mode — render
+  // it as "—" rather than dragging the whole result to invalid.
   const costEntries = [];
   if (modes.includes('gas'))      costEntries.push({ key: 'gas',      cost: gasCost });
   if (modes.includes('diesel'))   costEntries.push({ key: 'diesel',   cost: dieselCost });
@@ -1002,9 +1125,14 @@ function calculate() {
 
   const buildSpan = ({ key, cost }) => {
     const span = document.createElement('span');
-    span.className = 'result-cost result-cost-' + key +
-      (cost >= 80 ? ' is-high' : cost >= 30 ? ' is-mid' : '');
-    span.textContent = formatMoney(cost, region);
+    if (cost === null) {
+      span.className = 'result-cost result-cost-' + key + ' is-missing-rate';
+      span.textContent = '—';
+    } else {
+      span.className = 'result-cost result-cost-' + key +
+        (cost >= 80 ? ' is-high' : cost >= 30 ? ' is-mid' : '');
+      span.textContent = formatMoney(cost, region);
+    }
     return span;
   };
 
@@ -1047,24 +1175,32 @@ function calculate() {
 
   // Snapshot for the split-cost modal: split the highest cost (worst
   // case). Lets the user "split the bill" on the most expensive
-  // outcome regardless of which fuel they end up using.
-  const peakCost = Math.max(...costEntries.map(e => e.cost));
-  lastCostInfo  = { total: peakCost, region };
-  splitLinkEl.hidden = false;
+  // outcome regardless of which fuel they end up using. Skip null
+  // costs (modes whose inputs are blank) — when *all* are null, hide
+  // the split link since there's nothing to split.
+  const realCosts = costEntries.map(e => e.cost).filter(c => c !== null);
+  if (realCosts.length > 0) {
+    lastCostInfo = { total: Math.max(...realCosts), region };
+    splitLinkEl.hidden = false;
+  } else {
+    lastCostInfo = null;
+    splitLinkEl.hidden = true;
+  }
 
   // Volume readout. Each active fuel category contributes one figure:
   // liquid (gallons or litres) and electric (kWh) — joined with " / "
   // when both are present. Electric-only mode hides the liquid figure
-  // entirely, since the user isn't burning fuel.
+  // entirely, since the user isn't burning fuel. Skip categories
+  // whose efficiency inputs are blank.
   const volParts = [];
-  if (usesLiquid) {
+  if (usesLiquid && litresUsed !== null) {
     const volUnit    = VOLUME_UNITS[metric.volumeUnit];
     const volumeUsed = volUnit.fromLitres(litresUsed);
     volParts.push(
       `${volumeUsed.toLocaleString(region.locale, { maximumFractionDigits: 1 })} ${volUnit.unitLabel}`
     );
   }
-  if (modes.includes('electric')) {
+  if (modes.includes('electric') && kwhUsed !== null) {
     volParts.push(
       `${kwhUsed.toLocaleString(region.locale, { maximumFractionDigits: 1 })} kWh`
     );
@@ -1169,22 +1305,24 @@ function renderCostComparison() {
   const hwyPct        = parseInt(hwySlider.value, 10) / 100;
   const cityPct       = 1 - hwyPct;
 
-  // The row needs at least gas price (the fallback for cars whose
-  // fuel type doesn't cleanly map to gas/diesel/electric — flagged
-  // visually as "other"). Diesel and electric rates each only matter
-  // if the user has matching saved cars, but we read them anyway so
-  // the row updates immediately when the user types.
-  if (isNaN(dist) || dist <= 0 || isNaN(gasPrice) || gasPrice <= 0) {
+  // Only distance gates the row entirely — any saved car whose fuel
+  // doesn't have a matching rate just renders as "—" alongside the
+  // ones that do. (Earlier gating on gasPrice forced the user to fill
+  // in gas before they could see *any* comparison, even between two
+  // diesel cars or two EVs.)
+  if (isNaN(dist) || dist <= 0) {
     costComparisonEl.hidden = true;
     return;
   }
 
   const distKm = metric.distanceUnit === 'mi' ? dist * KM_PER_MILE : dist;
-  // null when the matching rate isn't filled in — the loop below shows
-  // "—" rather than silently falling back to gas (which would mislead
-  // for a diesel or electric car). Gas rate is always present here
-  // because the row is gated on a valid gasPrice above.
-  const costPerL_gas    = VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(gasPrice);
+  // Each rate is null when its price is blank — the per-car loop below
+  // shows "—" instead of silently falling back to a wrong rate. Gas
+  // also doubles as the fallback for "other" fuel categories (PHEVs
+  // etc.); those cars get "—" too when gas is blank.
+  const costPerL_gas = !isNaN(gasPrice) && gasPrice > 0
+    ? VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(gasPrice)
+    : null;
   const costPerL_diesel = !isNaN(dieselPrice) && dieselPrice > 0
     ? VOLUME_UNITS[region.gasPriceVolumeUnit].toLitres(dieselPrice)
     : null;
@@ -1233,9 +1371,11 @@ function renderCostComparison() {
       // hydrogen, alt-fuel) fall back to gas with the existing ⚠
       // glyph on the saved-car pill, since we have no honest rate
       // for them and the user picked them as a comparison reference.
-      const lkmHwy  = METRICS.mpg_us.toLitresPerKm(car.hwy);
-      const lkmCity = METRICS.mpg_us.toLitresPerKm(car.city);
-      cost = distKm * (lkmHwy * hwyPct + lkmCity * cityPct) * costPerL_gas;
+      if (costPerL_gas !== null) {
+        const lkmHwy  = METRICS.mpg_us.toLitresPerKm(car.hwy);
+        const lkmCity = METRICS.mpg_us.toLitresPerKm(car.city);
+        cost = distKm * (lkmHwy * hwyPct + lkmCity * cityPct) * costPerL_gas;
+      }
     }
 
     const item = document.createElement('span');
@@ -1577,14 +1717,24 @@ async function geocode(query, lang) {
   return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
 }
 
+// Both endpoints use POST with a JSON body. The previous GET form
+// (?json=…) avoided a CORS preflight, but encoded polylines for long
+// routes blew past nginx's URL-length limit and triggered 414s — whose
+// error response from nginx bypasses the location block's CORS headers,
+// so the browser surfaces the failure as "CORS Missing Allow Origin".
+// FOSSGIS now ships a proper preflight reply (Access-Control-Max-Age:
+// 86400), so the OPTIONS roundtrip is a one-per-day cost.
 async function valhallaRoute(locations) {
   const body = {
     locations: locations.map(({ lat, lon }) => ({ lat, lon })),
     costing: 'auto',
     directions_options: { units: 'kilometers' },
   };
-  // GET form avoids a CORS preflight that POST+JSON would trigger.
-  const res = await fetch(`${VALHALLA}/route?json=${encodeURIComponent(JSON.stringify(body))}`);
+  const res = await fetch(`${VALHALLA}/route`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(`Valhalla /route HTTP ${res.status}`);
   const data = await res.json();
   return {
@@ -1601,7 +1751,11 @@ async function valhallaHighwayFraction(legShapes) {
   const filters = { attributes: ['edge.length', 'edge.road_class'], action: 'include' };
   const results = await Promise.all(legShapes.map(async (encoded) => {
     const body = { encoded_polyline: encoded, shape_match: 'edge_walk', costing: 'auto', filters };
-    const res = await fetch(`${VALHALLA}/trace_attributes?json=${encodeURIComponent(JSON.stringify(body))}`);
+    const res = await fetch(`${VALHALLA}/trace_attributes`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
     if (!res.ok) throw new Error(`Valhalla /trace_attributes HTTP ${res.status}`);
     const data = await res.json();
     let highwayKm = 0, totalKm = 0;
@@ -1724,6 +1878,13 @@ function buildShareUrl() {
 
   if (regionSelect.value) params.set('region', regionSelect.value);
   if (metricSelect.value) params.set('metric', metricSelect.value);
+  // Only emit `lang` when the user has explicitly picked one (it diverges
+  // from the region's default). Recipients of the shared URL who haven't
+  // overridden their own language will then inherit the sender's choice.
+  const explicitLang = loadPrefs().language;
+  if (typeof explicitLang === 'string' && LANGUAGES_SET.has(explicitLang)) {
+    params.set('lang', explicitLang);
+  }
   if (distanceInput.value)  params.set('dist',  distanceInput.value);
   if (hwySlider.value)      params.set('hwy',   hwySlider.value);
   if (effHwyInput.value)    params.set('mpg_h', effHwyInput.value);
@@ -1764,6 +1925,10 @@ function readUrlParams() {
   const out = {};
   if (params.has('region')) out.region   = params.get('region');
   if (params.has('metric')) out.metric   = params.get('metric');
+  if (params.has('lang')) {
+    const l = params.get('lang');
+    if (LANGUAGES_SET.has(l)) out.language = l;
+  }
   if (params.has('dist'))   out.distance = params.get('dist');
   if (params.has('hwy'))    out.hwyPct   = params.get('hwy');
   if (params.has('mpg_h'))  out.effHwy   = params.get('mpg_h');
@@ -2722,6 +2887,187 @@ function resetCarLookup() {
 }
 
 // ═══════════════════════════════════════════════════
+// ONBOARDING (first-visit fuel-price prompt)
+// ═══════════════════════════════════════════════════
+
+// True when the user has nothing in localStorage that looks like a
+// fuel price they typed themselves. Region defaults aren't persisted,
+// so absence of these keys is the right "blank slate" signal.
+function hasAnySavedFuelPrice(prefs) {
+  return prefs.gasPrice    != null
+      || prefs.dieselPrice != null
+      || prefs.electricRate != null;
+}
+
+// Sync the prefix (currency symbol) and suffix (per-unit) labels of
+// each onboarding row to the active region — mirrors applyMetricUI's
+// logic for the main UI inputs.
+function applyOnboardingRegionUI(region) {
+  const volUnit = VOLUME_UNITS[region.gasPriceVolumeUnit];
+  const prefixSymbol = region.currencyPosition === 'prefix' ? region.currencySymbol : '';
+  const liquidSuffix = region.currencyPosition === 'prefix'
+    ? volUnit.label
+    : volUnit.label + ' ' + region.currencySymbol;
+  const electricSuffix = region.currencyPosition === 'prefix'
+    ? '/kWh'
+    : '/kWh ' + region.currencySymbol;
+
+  [onboardingGasPrefixEl, onboardingDieselPrefixEl, onboardingElectricPrefixEl].forEach(el => {
+    if (!el) return;
+    el.textContent = prefixSymbol;
+    el.style.display = prefixSymbol ? '' : 'none';
+  });
+  if (onboardingGasSuffixEl)      onboardingGasSuffixEl.textContent      = liquidSuffix;
+  if (onboardingDieselSuffixEl)   onboardingDieselSuffixEl.textContent   = liquidSuffix;
+  if (onboardingElectricSuffixEl) onboardingElectricSuffixEl.textContent = electricSuffix;
+
+  // Placeholders mirror the regional defaults so the user has a
+  // typing hint without it being a real value.
+  // Pad to the region's currency precision so e.g. USD's $4.20 default
+  // doesn't render as "4.2" (JS strips trailing zeros). JPY (0 digits)
+  // stays "170", BHD (3 digits) gets "0.180", etc.
+  if (region.defaultGasPrice    != null) onboardingGasEl.placeholder      = padPriceForCurrency(region.defaultGasPrice,    region.currency);
+  if (region.defaultDieselPrice != null) onboardingDieselEl.placeholder   = padPriceForCurrency(region.defaultDieselPrice, region.currency);
+  if (region.defaultElectricRate != null) onboardingElectricEl.placeholder = padPriceForCurrency(region.defaultElectricRate, region.currency);
+}
+
+// Hide the "enter at least one price" error when the user starts
+// typing. We never re-show it on input — only on a submit attempt
+// with all fields empty (see submitOnboarding).
+function clearOnboardingError() {
+  if (onboardingErrorEl && !onboardingErrorEl.hidden) onboardingErrorEl.hidden = true;
+}
+
+// Mirror the main settings bar's region/language options into the
+// modal's <select>s so we don't duplicate the (long) option lists in
+// HTML. Idempotent — safe to call on every open.
+function syncOnboardingLocaleOptions() {
+  if (onboardingRegionEl && onboardingRegionEl.children.length === 0) {
+    for (const opt of regionSelect.options) {
+      onboardingRegionEl.appendChild(opt.cloneNode(true));
+    }
+  }
+  if (onboardingLanguageEl && onboardingLanguageEl.children.length === 0) {
+    for (const opt of languageSelect.options) {
+      onboardingLanguageEl.appendChild(opt.cloneNode(true));
+    }
+  }
+}
+
+function openOnboardingModal() {
+  const region = REGIONS[regionSelect.value];
+  if (!region) return;
+  syncOnboardingLocaleOptions();
+  // Seed selectors from the already-resolved values in the main
+  // settings bar (which themselves came from the browser-locale
+  // detection block in init() on a brand-new visit).
+  if (onboardingRegionEl)   onboardingRegionEl.value   = regionSelect.value;
+  if (onboardingLanguageEl) onboardingLanguageEl.value = languageSelect.value;
+  applyOnboardingRegionUI(region);
+  onboardingFormEl.reset();
+  // reset() wipes the price fields; restore the seeded select values
+  // (which reset() also clears back to the first <option>).
+  if (onboardingRegionEl)   onboardingRegionEl.value   = regionSelect.value;
+  if (onboardingLanguageEl) onboardingLanguageEl.value = languageSelect.value;
+  clearOnboardingError();
+  if (typeof onboardingModalEl.showModal === 'function') {
+    onboardingModalEl.showModal();
+  } else {
+    onboardingModalEl.setAttribute('open', '');
+  }
+  // Defer so the dialog's own focus management (focus-trap on first
+  // tabbable) doesn't fight us.
+  setTimeout(() => onboardingGasEl.focus(), 0);
+}
+
+// Region change inside the modal applies live so the user can see the
+// currency prefix / suffix update before submitting. We deliberately
+// bypass `onRegionChange()` here — its regionChanged path resets the
+// main UI's price inputs to the new region's defaults, which would
+// fight the whole point of the modal (the user is providing their
+// own prices). Instead we apply only the region-dependent UI bits and
+// delegate the metric-change side (including efficiency conversion)
+// to `onMetricChange`.
+async function onModalRegionChange() {
+  const newRegionKey = onboardingRegionEl.value;
+  const newRegion    = REGIONS[newRegionKey];
+  if (!newRegion) return;
+  regionSelect.value = newRegionKey;
+  // Persist the new region first so onMetricChange's region read
+  // resolves to the new region (it pulls from regionSelect.value).
+  savePrefs({ region: newRegionKey });
+  // Switching region typically implies a metric switch too (US → FR =
+  // mpg_us → l100km). Setting metricSelect + dispatching keeps the
+  // efficiency values converted instead of just relabelled.
+  if (metricSelect.value !== newRegion.defaultMetric) {
+    metricSelect.value = newRegion.defaultMetric;
+    onMetricChange();
+  } else {
+    // Same metric, but currency / volume-unit may still differ.
+    applyMetricUI(metricSelect.value, newRegion);
+  }
+  if (newRegion.defaultGasPrice    != null) gasPriceInput.placeholder    = padPriceForCurrency(newRegion.defaultGasPrice,    newRegion.currency);
+  if (newRegion.defaultDieselPrice != null) dieselPriceInput.placeholder = padPriceForCurrency(newRegion.defaultDieselPrice, newRegion.currency);
+  if (newRegion.defaultElectricRate != null) electricRateInput.placeholder = padPriceForCurrency(newRegion.defaultElectricRate, newRegion.currency);
+  applyOnboardingRegionUI(newRegion);
+  // Re-pad any partial value the user already typed into the modal
+  // to the new currency's precision (e.g. switching JPY → EUR after
+  // typing "170" should display as "170.00").
+  [onboardingGasEl, onboardingDieselEl, onboardingElectricEl].forEach(el => {
+    if (el.value) el.value = padPriceForCurrency(el.value, newRegion.currency);
+  });
+  updateShareUrl();
+}
+
+async function onModalLanguageChange() {
+  const newLang = onboardingLanguageEl.value;
+  if (!LANGUAGES_SET.has(newLang)) return;
+  await applyLanguage(newLang);
+  if (languageSelect) languageSelect.value = newLang;
+  savePrefs({ language: newLang });
+  updateShareUrl();
+}
+
+function submitOnboarding(e) {
+  e.preventDefault();
+  const region = REGIONS[regionSelect.value];
+  const patch = {};
+  const filledModes = [];
+  const now = Date.now();
+  const readField = (el, mode, priceKey, tsKey, mainInputEl) => {
+    const v = parseFloat(el.value);
+    if (!isNaN(v) && v > 0) {
+      const padded = padPriceForCurrency(el.value, region.currency);
+      patch[priceKey] = padded;
+      patch[tsKey]    = now;
+      mainInputEl.value = padded;
+      filledModes.push(mode);
+    }
+  };
+  readField(onboardingGasEl,      'gas',      'gasPrice',     'gasPriceUpdatedAt',     gasPriceInput);
+  readField(onboardingDieselEl,   'diesel',   'dieselPrice',  'dieselPriceUpdatedAt',  dieselPriceInput);
+  readField(onboardingElectricEl, 'electric', 'electricRate', 'electricRateUpdatedAt', electricRateInput);
+  // No prices typed → surface a visible error rather than failing
+  // silently. The button stays clickable so a sighted user gets the
+  // same feedback loop as a screen-reader user (role=alert + aria-live).
+  if (filledModes.length === 0) {
+    if (onboardingErrorEl) onboardingErrorEl.hidden = false;
+    return;
+  }
+  savePrefs(patch);
+  // The active price modes after onboarding mirror exactly what the
+  // user filled in: only diesel ⇒ diesel-only mode; gas + electric
+  // ⇒ both visible. `applyPriceModes` writes priceMode to prefs,
+  // updates the visible price-input slots, swaps the section label,
+  // and re-runs calculate().
+  applyPriceModes(filledModes, { save: true });
+  if (typeof onboardingModalEl.close === 'function') onboardingModalEl.close();
+  else onboardingModalEl.removeAttribute('open');
+  refreshStalePrompt();
+  updateShareUrl();
+}
+
+// ═══════════════════════════════════════════════════
 // REGION CHANGE
 // ═══════════════════════════════════════════════════
 
@@ -2730,14 +3076,13 @@ async function onRegionChange(saveAfter = true) {
   const region    = REGIONS[regionKey];
   const prefs     = loadPrefs();
 
-  // Fetch language strings and a random title (English skips the fetch)
-  const [strings, titles] = await Promise.all([
-    loadLanguage(region.lang),
-    loadTitles(region.lang),
-  ]);
-  applyTranslations(strings);
-  applyRandomTitle(titles);
-  document.documentElement.lang = region.lang;
+  // Language only follows the region when the user hasn't explicitly
+  // picked one — once they have, the region change keeps currency /
+  // units / price defaults in sync but leaves the UI strings alone.
+  if (typeof prefs.language !== 'string' || !LANGUAGES_SET.has(prefs.language)) {
+    await applyLanguage(region.lang);
+    if (languageSelect) languageSelect.value = region.lang;
+  }
 
   // Set default metric
   metricSelect.value = region.defaultMetric;
@@ -2756,6 +3101,11 @@ async function onRegionChange(saveAfter = true) {
     dieselPriceInput.value  = region.defaultDieselPrice ?? region.defaultGasPrice;
     electricRateInput.value = region.defaultElectricRate ?? 0.18;
   }
+  // Placeholders track the new region's typical prices so they hint
+  // appropriate magnitudes if the user later clears a field.
+  if (region.defaultGasPrice    != null) gasPriceInput.placeholder    = padPriceForCurrency(region.defaultGasPrice,    region.currency);
+  if (region.defaultDieselPrice != null) dieselPriceInput.placeholder = padPriceForCurrency(region.defaultDieselPrice, region.currency);
+  if (region.defaultElectricRate != null) electricRateInput.placeholder = padPriceForCurrency(region.defaultElectricRate, region.currency);
   // Re-pad to the new region's currency precision regardless — both for
   // the just-loaded defaults and for previously-typed values whose
   // currency may have just changed.
@@ -2786,6 +3136,23 @@ async function onRegionChange(saveAfter = true) {
   }
   refreshStalePrompt();
   if (saveAfter) updateShareUrl();
+}
+
+// ═══════════════════════════════════════════════════
+// LANGUAGE CHANGE
+// ═══════════════════════════════════════════════════
+
+// Translate the UI without touching currency, units, or price defaults.
+// `prefs.language` is only set here (or via the URL `lang=` param), so
+// its presence is what tells onRegionChange to keep its hands off the
+// language on subsequent region switches.
+async function onLanguageChange() {
+  const langCode = LANGUAGES_SET.has(languageSelect.value)
+    ? languageSelect.value
+    : 'en';
+  await applyLanguage(langCode);
+  savePrefs({ language: langCode });
+  updateShareUrl();
 }
 
 // ═══════════════════════════════════════════════════
@@ -2853,6 +3220,18 @@ async function init() {
     const cleanUrl = location.pathname + (DEBUG_STALE ? '?staleDebug=1' : '');
     try { history.replaceState(null, '', cleanUrl); } catch {}
   }
+  // First-visit guess: nothing in localStorage and no `region` in the
+  // URL → infer region/language from the browser's preferred locales.
+  // Persist the guess so subsequent loads don't re-detect (and so any
+  // user override via the dropdowns becomes the authoritative value).
+  const savedPrefs = loadPrefs();
+  const isFirstVisit = !savedPrefs.region && !urlParams.region;
+  if (isFirstVisit) {
+    const detectedRegion = detectRegionFromBrowser();
+    const detectedLang   = detectLanguageFromBrowser();
+    savePrefs({ region: detectedRegion, language: detectedLang });
+  }
+
   const prefs     = { ...loadPrefs(), ...urlParams };
   const regionKey = prefs.region && REGIONS[prefs.region] ? prefs.region : 'us';
   const region    = REGIONS[regionKey];
@@ -2861,26 +3240,25 @@ async function init() {
 
   regionSelect.value = regionKey;
   metricSelect.value = metricKey;
+  // Effective language: explicit pref wins, else region default. The
+  // language select gets painted with the resolved value either way so
+  // it always reflects what's currently rendered.
+  const langCode = effectiveLanguage(prefs);
+  if (languageSelect) languageSelect.value = langCode;
 
   effHwyInput.value       = prefs.effHwy   ?? metric.defaultHwy;
   effCityInput.value      = prefs.effCity  ?? metric.defaultCity;
-  gasPriceInput.value     = prefs.gasPrice ?? region.defaultGasPrice;
-  // Diesel default: if the user has a saved gas price but no diesel,
-  // scale the region's default-diesel by their gas/region ratio so the
-  // diesel default tracks how far above/below the region average their
-  // gas price is. Falls back to the region's default-diesel when no
-  // gas is saved either.
-  const dieselDefault = (() => {
-    if (prefs.gasPrice && region.defaultGasPrice && region.defaultDieselPrice) {
-      const userGas = parseFloat(prefs.gasPrice);
-      if (userGas > 0) {
-        return +(region.defaultDieselPrice * (userGas / region.defaultGasPrice)).toFixed(2);
-      }
-    }
-    return region.defaultDieselPrice ?? region.defaultGasPrice;
-  })();
-  dieselPriceInput.value  = prefs.dieselPrice ?? dieselDefault;
-  electricRateInput.value = prefs.electricRate ?? region.defaultElectricRate ?? 0.18;
+  // Fuel prices: don't pre-fill with region defaults — the onboarding
+  // modal collects the user's *actual* local prices on first visit.
+  // Subsequent loads restore whatever they entered. A blank input
+  // means "I'm not interested in this fuel" → its cost renders as
+  // "—". Placeholders show the regional default as a typing hint.
+  gasPriceInput.value     = prefs.gasPrice    ?? '';
+  dieselPriceInput.value  = prefs.dieselPrice ?? '';
+  electricRateInput.value = prefs.electricRate ?? '';
+  if (region.defaultGasPrice    != null) gasPriceInput.placeholder    = padPriceForCurrency(region.defaultGasPrice,    region.currency);
+  if (region.defaultDieselPrice != null) dieselPriceInput.placeholder = padPriceForCurrency(region.defaultDieselPrice, region.currency);
+  if (region.defaultElectricRate != null) electricRateInput.placeholder = padPriceForCurrency(region.defaultElectricRate, region.currency);
   formatPriceInputs(region.currency);
   // EV efficiency defaults: ~28 kWh/100mi hwy, ~32 kWh/100mi city
   // (typical mid-size EV). Stored values are already in display units
@@ -2931,13 +3309,13 @@ async function init() {
   // Fetch language strings, a random title, and model-name aliases
   // (English skips the language fetch; alias load is best-effort).
   const [strings, titles] = await Promise.all([
-    loadLanguage(region.lang),
-    loadTitles(region.lang),
+    loadLanguage(langCode),
+    loadTitles(langCode),
     loadModelAliases(),
   ]);
   applyTranslations(strings);
   applyRandomTitle(titles);
-  document.documentElement.lang = region.lang;
+  document.documentElement.lang = langCode;
 
   applyMetricUI(metricKey, region);
   updateSliderDisplay();
@@ -2945,7 +3323,17 @@ async function init() {
   renderSavedCars();
   refreshStalePrompt();
   updateShareUrl();
-  distanceInput.focus();
+
+  // First-visit prompt: if no fuel price is saved at all, open the
+  // onboarding modal before letting the user touch anything else.
+  // The modal can't be dismissed until the user enters ≥1 price.
+  // (Returning users with at least one saved price skip this entirely;
+  // they've already provided their numbers.)
+  if (!hasAnySavedFuelPrice(prefs)) {
+    openOnboardingModal();
+  } else {
+    distanceInput.focus();
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -2953,6 +3341,7 @@ async function init() {
 // ═══════════════════════════════════════════════════
 
 regionSelect.addEventListener('change', () => onRegionChange(true));
+languageSelect.addEventListener('change', onLanguageChange);
 metricSelect.addEventListener('change', onMetricChange);
 
 hwySlider.addEventListener('input', () => {
@@ -3167,9 +3556,22 @@ carInputEl.addEventListener('focus', () => {
 });
 
 document.addEventListener('click', e => {
-  if (!carInputEl.contains(e.target) && !carListEl.contains(e.target) && !carClearEl.contains(e.target)) {
-    hideCarList();
+  // Chip clicks go back a step and re-show the list for that stage.
+  // We need to skip the hide for those clicks — but the chip is
+  // detached from `carChipsEl` by `renderCarChips()` (which fires
+  // synchronously during the chip's own click handler, before the
+  // event bubbles up here), so `carChipsEl.contains(e.target)` is
+  // already false by the time we run. Use `composedPath()` instead:
+  // it captures the original event path at dispatch time, so the
+  // chip's ancestors-as-of-the-click still include `carChipsEl`.
+  const path = e.composedPath();
+  if (path.includes(carInputEl)
+      || path.includes(carListEl)
+      || path.includes(carClearEl)
+      || path.includes(carChipsEl)) {
+    return;
   }
+  hideCarList();
 });
 
 carClearEl.addEventListener('click', () => {
@@ -3189,6 +3591,30 @@ shareNativeEl.addEventListener('click', nativeShare);
 shareModalEl.addEventListener('click', e => {
   if (e.target === shareModalEl) shareModalEl.close();
 });
+
+// QR-code modal: clicking *anywhere* on the header opens it (the icon
+// is the visual cue, but the whole banner is one big click target so
+// it's easier to hit on mobile). The icon button stays as a real
+// <button> for keyboard/screen-reader users — its click event simply
+// bubbles up to the header listener, so we don't need a separate
+// handler. Closes on × or any click in the modal that doesn't land
+// on the QR image, the URL link, or the × button — effectively
+// "click in any empty area to dismiss".
+const heroEl = document.querySelector('.hero');
+if (heroEl && qrModalEl) {
+  heroEl.addEventListener('click', () => {
+    if (qrModalEl.open) return;
+    if (typeof qrModalEl.showModal === 'function') qrModalEl.showModal();
+    else qrModalEl.setAttribute('open', '');
+  });
+  qrCloseEl.addEventListener('click', () => qrModalEl.close());
+  qrModalEl.addEventListener('click', e => {
+    if (e.target.closest('.qr-image-wrap')
+        || e.target.closest('.qr-url')
+        || e.target.closest('.qr-close')) return;
+    qrModalEl.close();
+  });
+}
 
 // Install nudge: banner action opens the modal, × dismisses for good.
 // Modal Install/Cancel buttons fire the stashed prompt or close out.
@@ -3218,6 +3644,17 @@ splitModalEl.addEventListener('click', e => {
 document.getElementById('custom-vehicle-close').addEventListener('click', closeCustomVehicleModal);
 document.getElementById('custom-vehicle-cancel').addEventListener('click', closeCustomVehicleModal);
 customVehicleFormEl.addEventListener('submit', submitCustomVehicle);
+
+// Onboarding modal — block Esc-cancel until the user has typed at
+// least one price (the form's submit gate enforces the same), and
+// re-evaluate the submit state every keystroke.
+onboardingModalEl.addEventListener('cancel', e => {
+  e.preventDefault();
+});
+onboardingFormEl.addEventListener('input', clearOnboardingError);
+onboardingFormEl.addEventListener('submit', submitOnboarding);
+if (onboardingRegionEl)   onboardingRegionEl.addEventListener('change', onModalRegionChange);
+if (onboardingLanguageEl) onboardingLanguageEl.addEventListener('change', onModalLanguageChange);
 customVehicleFormEl.querySelectorAll('input[name="custom-fuel"]').forEach(r => {
   r.addEventListener('change', updateCustomEffVisibility);
 });

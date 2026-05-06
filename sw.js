@@ -9,7 +9,7 @@
    - Bump VERSION to force a cache refresh after a deploy.
    =================================================== */
 
-const VERSION    = 'v22';
+const VERSION    = 'v34';
 const CACHE_NAME = `mileage-${VERSION}`;
 
 const LANGS = [
@@ -25,6 +25,7 @@ const SHELL = [
   './manifest.json',
   './icon.svg',
   './kastrack.png',
+  './qr.svg',
   './model-aliases.json',
   ...LANGS.flatMap(l => [`./lang/${l}.json`, `./titles/${l}.json`]),
 ];
