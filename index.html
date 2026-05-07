@@ -649,6 +649,43 @@
       </div>
     </dialog>
 
+    <!-- Route-legs modal — opened from the "View route" link when the
+         trip has more than one destination. OpenStreetMap's directions UI
+         doesn't always honour multi-waypoint routes cleanly, so for
+         multi-stop trips we show a per-leg breakdown here (mileage and
+         cost per leg with a per-leg "View leg" link to OSM) and offer a
+         "View route" button at the bottom for the full route. Single-
+         destination trips skip this modal and click straight through. -->
+    <dialog class="split-modal route-modal" id="route-modal" aria-labelledby="route-modal-title">
+      <div class="split-modal-content">
+        <button
+          type="button"
+          id="route-modal-close"
+          class="split-close"
+          data-i18n-aria="split.close"
+          aria-label="Close"
+        >&times;</button>
+        <h2 class="split-modal-title" id="route-modal-title" data-i18n="route.legsTitle">Route legs</h2>
+        <div id="route-legs-list" class="route-legs-list"></div>
+        <div class="route-modal-actions">
+          <button
+            type="button"
+            id="route-modal-cancel"
+            class="share-action share-action-secondary"
+            data-i18n="split.close"
+          >Close</button>
+          <a
+            id="route-modal-view-route"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="share-action"
+            data-i18n="route.viewOnMap"
+          >View route</a>
+        </div>
+      </div>
+    </dialog>
+
     <!-- Split-cost modal — opened from the .split-link beneath the result -->
     <dialog class="split-modal" id="split-modal" aria-labelledby="split-title">
       <div class="split-modal-content">

@@ -940,6 +940,11 @@ const routeAddStopEl  = document.getElementById('route-add-stop');
 const routeButtonEl   = document.getElementById('route-calculate');
 const routeStatusEl   = document.getElementById('route-status');
 const osmLinkEl       = document.getElementById('osm-link');
+const routeModalEl          = document.getElementById('route-modal');
+const routeLegsListEl       = document.getElementById('route-legs-list');
+const routeModalCloseEl     = document.getElementById('route-modal-close');
+const routeModalCancelEl    = document.getElementById('route-modal-cancel');
+const routeModalViewRouteEl = document.getElementById('route-modal-view-route');
 const costComparisonEl = document.getElementById('cost-comparison');
 
 // Live array of destination <input> elements in render order. Always at
@@ -981,6 +986,14 @@ let lastRouteKm = null;
 // constructed from this on the fly so toggling one-way after a calc
 // flips the link too.
 let lastRouteLocations = null;
+// Per-leg breakdown from the last successful calc, captured in the
+// direction Valhalla was queried in (forward-only or full round-trip
+// loop). Each entry: { km, fromLabel, toLabel, fromCoord, toCoord }.
+// Powers the multi-stop "View route" modal — for a single-destination
+// trip this is null and the OSM link stays a direct nav. Each leg's
+// label texts come from the route inputs at calc time so they stay
+// stable across reloads.
+let lastRouteLegs = null;
 // Session-only: starts false on every page load so the link only ever
 // appears after a Calculate-in-this-session. Set true in planRoute,
 // cleared on manual distance edit. Not persisted.
@@ -1180,7 +1193,10 @@ function calculate() {
   // the split link since there's nothing to split.
   const realCosts = costEntries.map(e => e.cost).filter(c => c !== null);
   if (realCosts.length > 0) {
-    lastCostInfo = { total: Math.max(...realCosts), region };
+    // Per-mode breakdown is needed by the route-legs modal to render a
+    // cost-per-fuel column matching the headline; the peak `total` is
+    // what the split modal divides up.
+    lastCostInfo = { total: Math.max(...realCosts), region, costs: costEntries };
     splitLinkEl.hidden = false;
   } else {
     lastCostInfo = null;
@@ -1739,6 +1755,7 @@ async function valhallaRoute(locations) {
   const data = await res.json();
   return {
     distanceKm: data.trip.summary.length,                // total over all legs, kilometres
+    legKms:     data.trip.legs.map(l => l.summary.length),
     legShapes:  data.trip.legs.map(l => l.shape),        // array of polyline6 strings
   };
 }
@@ -1838,6 +1855,23 @@ async function planRoute() {
     // Stash forward-direction coords for the OSM link (round trip is
     // derived on the fly from the current one-way state).
     lastRouteLocations = fwd.map(({ lat, lon }) => ({ lat, lon }));
+
+    // Per-leg breakdown for the multi-stop modal. Multi-stop is locked
+    // to one-way (see updateOneWayDisabled), so legs are always forward
+    // origin → ... → final destination.
+    if (destStates.length > 1) {
+      const legLabels = [originText, ...destStates.map(d => d.text)];
+      const legCoords = locations.map(({ lat, lon }) => ({ lat, lon }));
+      lastRouteLegs = route.legKms.map((km, i) => ({
+        km,
+        fromLabel: legLabels[i],
+        toLabel:   legLabels[i + 1],
+        fromCoord: legCoords[i],
+        toCoord:   legCoords[i + 1],
+      }));
+    } else {
+      lastRouteLegs = null;
+    }
     osmLinkVisible = true;
     setDistanceFromRouteKm(oneWayKm);
     refreshOsmLink();
@@ -1958,6 +1992,7 @@ function readUrlParams() {
   if (params.has('dist') || params.has('o') || params.has('d')) {
     out.lastRouteKm = null;
     out.lastRouteLocations = null;
+    out.lastRouteLegs = null;
   }
   return out;
 }
@@ -2205,21 +2240,56 @@ function saveRouteState() {
     routeDestinations:  d,
     lastRouteKm:        lastRouteKm,
     lastRouteLocations: lastRouteLocations,
+    lastRouteLegs:      lastRouteLegs,
   });
 }
 
-// Show the "View route" link only when the distance came from a real
-// calculation (lastRouteKm not null) AND we have coords to build the
-// URL. Round trip is derived on the fly from the current one-way state
-// so toggling the checkbox flips the URL.
+// "View route" link target. openstreetmap.org/directions doesn't
+// support multi-waypoint routing — its UI is hardcoded to two endpoints
+// and silently drops anything beyond `route[1]` — so we send users to
+// a map service that does. Switching providers is a one-line change:
+// flip `MAP_PROVIDER` below.
 //
-// OSM's directions UI accepts multi-waypoint routes via the `route`
-// param: semicolon-separated `lat,lon` pairs. Using the OSRM engine
-// (fossgis_osrm_car) here — Valhalla on OSM doesn't reliably honour
-// extra waypoints, but OSRM does. Our internal distance calculation
-// still uses Valhalla; the two engines may compute marginally different
-// shortest paths but the difference is negligible for cost purposes.
-const OSM_DIRECTIONS_BASE = 'https://www.openstreetmap.org/directions';
+// Per-leg "View leg" links in the route-legs modal go through the same
+// provider so the user lands on a familiar UI for both the overview
+// and the leg drilldowns.
+const MAP_PROVIDERS = {
+  // GraphHopper Maps — OSM data, FOSS routing engine, free public demo.
+  // Multi-waypoint via repeated `&point=lat,lon` params.
+  graphhopper: {
+    routeUrl(coordPairs) {
+      const params = new URLSearchParams();
+      coordPairs.forEach(p => params.append('point', `${p.lat},${p.lon}`));
+      params.set('profile', 'car');
+      return `https://graphhopper.com/maps/?${params.toString()}`;
+    },
+  },
+  // Google Maps — stub kept ready for an easy provider swap. Format:
+  // /maps/dir/?api=1&origin=...&destination=...&waypoints=A|B|C&travelmode=driving
+  googleMaps: {
+    routeUrl(coordPairs) {
+      if (coordPairs.length < 2) return '';
+      const origin = coordPairs[0];
+      const dest   = coordPairs[coordPairs.length - 1];
+      const params = new URLSearchParams();
+      params.set('api', '1');
+      params.set('travelmode', 'driving');
+      params.set('origin',      `${origin.lat},${origin.lon}`);
+      params.set('destination', `${dest.lat},${dest.lon}`);
+      const waypoints = coordPairs.slice(1, -1);
+      if (waypoints.length > 0) {
+        params.set('waypoints', waypoints.map(p => `${p.lat},${p.lon}`).join('|'));
+      }
+      return `https://www.google.com/maps/dir/?${params.toString()}`;
+    },
+  },
+};
+const MAP_PROVIDER = MAP_PROVIDERS.graphhopper;
+
+function mapRouteUrl(coordPairs) {
+  return MAP_PROVIDER.routeUrl(coordPairs);
+}
+
 function refreshOsmLink() {
   if (!osmLinkEl) return;
   if (!osmLinkVisible || lastRouteKm === null ||
@@ -2228,11 +2298,157 @@ function refreshOsmLink() {
     return;
   }
   const fwd = lastRouteLocations;
+  // Round-trip with a single destination: append the origin again so
+  // the map renders the out-and-back loop. Multi-stop is locked to
+  // one-way by updateOneWayDisabled, so loop handling never applies
+  // when destStates.length > 1.
   const oneWay = oneWayCheckEl.checked;
-  const all = oneWay ? fwd : [...fwd, ...fwd.slice(0, -1).reverse()];
-  const route = all.map(p => `${p.lat},${p.lon}`).join(';');
-  osmLinkEl.href = `${OSM_DIRECTIONS_BASE}?engine=fossgis_osrm_car&route=${encodeURIComponent(route)}`;
+  const all = oneWay ? fwd : [...fwd, fwd[0]];
+  osmLinkEl.href = mapRouteUrl(all);
   osmLinkEl.hidden = false;
+}
+
+// Multi-stop trips: take over the "View route" click and surface a
+// per-leg breakdown instead of letting OSM's directions UI try to
+// handle multi-waypoint routing (which it doesn't always do well).
+// Single-destination trips fall through to the default link nav.
+function osmLinkClick(e) {
+  if (Array.isArray(lastRouteLegs) && lastRouteLegs.length > 1) {
+    e.preventDefault();
+    openRouteLegsModal();
+  }
+}
+
+function openRouteLegsModal() {
+  if (!routeModalEl || !Array.isArray(lastRouteLegs) || lastRouteLegs.length < 1) return;
+  renderRouteLegs();
+  routeModalEl.showModal();
+}
+
+function closeRouteLegsModal() {
+  if (routeModalEl) routeModalEl.close();
+}
+
+// Place / address labels from Photon often look like "City, State,
+// Country" — the trailing components rarely add disambiguation in the
+// table context and waste horizontal room. Keep just the part up to the
+// first comma so the label cell stays compact.
+function shortLegLabel(label) {
+  if (typeof label !== 'string') return '';
+  const idx = label.indexOf(',');
+  return (idx === -1 ? label : label.slice(0, idx)).trim();
+}
+
+// Per-leg cost is computed as legKm × per-km cost for *each* active fuel
+// mode (lastCostInfo.costs has one entry per mode in the same order the
+// headline renders). This stays consistent with the headline — a leg's
+// gas/diesel/electric numbers are its share of each mode's total cost.
+// In the rare case the user toggled one-way after the route was
+// calculated, leg distances reflect the original calc and may not sum
+// to the displayed total; the per-leg numbers are still meaningful, but
+// the user can re-Calculate to refresh the breakdown.
+function renderRouteLegs() {
+  if (!routeLegsListEl || !Array.isArray(lastRouteLegs)) return;
+  while (routeLegsListEl.firstChild) {
+    routeLegsListEl.removeChild(routeLegsListEl.firstChild);
+  }
+
+  const region = REGIONS[regionSelect.value];
+  const metric = METRICS[metricSelect.value];
+  const distVal = parseFloat(distanceInput.value);
+  const displayedKm = (distVal > 0)
+    ? (metric.distanceUnit === 'mi' ? distVal * KM_PER_MILE : distVal)
+    : 0;
+  const costs = (lastCostInfo && Array.isArray(lastCostInfo.costs) && displayedKm > 0)
+    ? lastCostInfo.costs
+    : null;
+
+  // Mirror the headline's per-mode cost-span builder so the modal
+  // reads as a leg-scoped clone of the result row — including the
+  // green / amber / red threshold colouring per fuel.
+  const buildLegCostSpan = ({ key, cost }) => {
+    const span = document.createElement('span');
+    if (cost === null) {
+      span.className = 'result-cost result-cost-' + key + ' is-missing-rate';
+      span.textContent = '—';
+    } else {
+      span.className = 'result-cost result-cost-' + key +
+        (cost >= 80 ? ' is-high' : cost >= 30 ? ' is-mid' : '');
+      span.textContent = formatMoney(cost, region);
+    }
+    return span;
+  };
+
+  lastRouteLegs.forEach(leg => {
+    // Each leg is a 2-row card: route text on top, then a row with
+    // costs (left) and distance + view-link stacked (right).
+    const card = document.createElement('div');
+    card.className = 'route-leg';
+
+    const label = document.createElement('div');
+    label.className = 'route-leg-label';
+    label.appendChild(document.createTextNode(shortLegLabel(leg.fromLabel)));
+    const arrow = document.createElement('span');
+    arrow.className = 'route-leg-arrow';
+    arrow.textContent = ' → ';
+    label.appendChild(arrow);
+    label.appendChild(document.createTextNode(shortLegLabel(leg.toLabel)));
+    card.appendChild(label);
+
+    const row = document.createElement('div');
+    row.className = 'route-leg-row';
+
+    const costEl = document.createElement('div');
+    costEl.className = 'route-leg-cost';
+    if (costs) {
+      const ratio = leg.km / displayedKm;
+      costs.forEach((entry, i) => {
+        if (i > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'result-cost-sep';
+          sep.textContent = '/';
+          costEl.appendChild(sep);
+        }
+        costEl.appendChild(buildLegCostSpan({
+          key:  entry.key,
+          cost: entry.cost === null ? null : entry.cost * ratio,
+        }));
+      });
+    } else {
+      costEl.textContent = '—';
+    }
+    row.appendChild(costEl);
+
+    const meta = document.createElement('div');
+    meta.className = 'route-leg-meta';
+
+    const distEl = document.createElement('div');
+    distEl.className = 'route-leg-dist';
+    const legDisplayDist = metric.distanceUnit === 'mi'
+      ? leg.km / KM_PER_MILE
+      : leg.km;
+    distEl.textContent = `${Math.round(legDisplayDist).toLocaleString(region.locale)} ${metric.distanceUnit}`;
+    meta.appendChild(distEl);
+
+    const a = document.createElement('a');
+    a.href = mapRouteUrl([leg.fromCoord, leg.toCoord]);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'route-leg-view';
+    a.textContent = t('route.viewLeg', 'View leg');
+    meta.appendChild(a);
+
+    row.appendChild(meta);
+    card.appendChild(row);
+    routeLegsListEl.appendChild(card);
+  });
+
+  // Mirror whatever URL the inline link is currently set to — the
+  // user might have toggled one-way since the calc, and refreshOsmLink
+  // already accounts for that.
+  if (routeModalViewRouteEl && osmLinkEl && osmLinkEl.href) {
+    routeModalViewRouteEl.href = osmLinkEl.href;
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -3301,6 +3517,7 @@ async function init() {
   }
   if (typeof prefs.lastRouteKm === 'number') lastRouteKm = prefs.lastRouteKm;
   if (Array.isArray(prefs.lastRouteLocations)) lastRouteLocations = prefs.lastRouteLocations;
+  if (Array.isArray(prefs.lastRouteLegs))      lastRouteLegs      = prefs.lastRouteLegs;
   refreshOsmLink();
 
   effHwyInput.placeholder  = metric.defaultHwy;
@@ -3361,6 +3578,8 @@ distanceInput.addEventListener('input', () => {
   if (!suppressDistanceClear) {
     lastRouteKm = null;
     patch.lastRouteKm = null;
+    lastRouteLegs = null;
+    patch.lastRouteLegs = null;
     osmLinkVisible = false;
     refreshOsmLink();
   }
@@ -3495,7 +3714,21 @@ routeAddStopEl.addEventListener('click', () => {
 function updateOneWayDisabled() {
   const allEmpty = !routeOriginEl.value.trim() &&
     destinationInputs.every(el => !el.value.trim());
-  oneWayCheckEl.disabled = allEmpty;
+  // Multi-stop trips are always one-way. Round-trip with multiple
+  // destinations doesn't model anything meaningful for fuel cost (the
+  // user can list each leg explicitly if they want a loop), and the
+  // synthesized return doubles a route the user didn't ask Valhalla to
+  // measure. Force the checkbox + sync the side-effects so distance /
+  // OSM URL / saved prefs / share URL stay coherent.
+  const multiStop = destinationInputs.length > 1;
+  if (multiStop && !oneWayCheckEl.checked) {
+    oneWayCheckEl.checked = true;
+    savePrefs({ oneWay: true });
+    if (lastRouteKm !== null) setDistanceFromRouteKm(lastRouteKm);
+    refreshOsmLink();
+    updateShareUrl();
+  }
+  oneWayCheckEl.disabled = allEmpty || multiStop;
 }
 routeOriginEl.addEventListener('input', () => {
   updateOneWayDisabled();
@@ -3638,6 +3871,18 @@ splitCloseEl.addEventListener('click', () => splitModalEl.close());
 splitModalEl.addEventListener('click', e => {
   if (e.target === splitModalEl) splitModalEl.close();
 });
+
+// Route-legs modal — hijack the "View route" link click for trips with
+// > 1 destination so the user gets a per-leg breakdown instead of OSM's
+// often-broken multi-waypoint UI. Same backdrop-close pattern.
+osmLinkEl.addEventListener('click', osmLinkClick);
+if (routeModalCloseEl)  routeModalCloseEl.addEventListener('click', closeRouteLegsModal);
+if (routeModalCancelEl) routeModalCancelEl.addEventListener('click', closeRouteLegsModal);
+if (routeModalEl) {
+  routeModalEl.addEventListener('click', e => {
+    if (e.target === routeModalEl) closeRouteLegsModal();
+  });
+}
 
 // Custom-vehicle modal — opened from the no-results panel in the car
 // search dropdown. Same backdrop-close pattern as the other modals.

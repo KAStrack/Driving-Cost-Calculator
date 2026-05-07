@@ -1038,6 +1038,129 @@ details[open] > .route-heading::before { transform: rotate(90deg); }
    the URL textarea, the action buttons, and the tagline. */
 .share-modal { width: 380px; }
 
+/* ===== ROUTE-LEGS MODAL =====
+   Replaces the direct OSM-nav for trips with > 1 destination — OSM's
+   directions UI doesn't always honour multi-waypoint routes cleanly.
+   Each leg gets a row with its own "View leg" link to OSM (just two
+   waypoints, which OSM handles fine), and the bottom-row "View route"
+   button still links to the full route for users who want it. */
+.route-modal { width: 460px; }
+
+/* Each leg renders as a 2-row card: route text on top, then a row with
+   prices on the left and a distance/view-link stack on the right. The
+   cost numbers carry the headline weight so they're the first thing
+   the user sees when scanning. */
+.route-legs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.route-leg {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.route-leg:first-child { padding-top: 4px; }
+.route-leg:last-child  { border-bottom: none; padding-bottom: 4px; }
+
+.route-leg-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--cream);
+  line-height: 1.3;
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+
+.route-leg-arrow {
+  color: var(--label);
+  font-weight: 400;
+  margin: 0 4px;
+}
+
+.route-leg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.route-leg-cost {
+  font-family: var(--font-mono);
+  font-size: 1.9rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--cream);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.route-leg-cost .result-cost          { color: var(--green); }
+.route-leg-cost .result-cost.is-mid   { color: var(--amber); }
+.route-leg-cost .result-cost.is-high  { color: var(--red); }
+.route-leg-cost .result-cost.is-missing-rate { color: var(--label); }
+.route-leg-cost .result-cost-sep {
+  color: var(--label);
+  margin: 0 0.12em;
+  font-weight: 400;
+}
+
+.route-leg-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.route-leg-dist {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--label);
+}
+
+.route-leg-view {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--terra-light);
+  text-decoration: none;
+}
+
+.route-leg-view:hover         { color: var(--cream); text-decoration: underline; }
+.route-leg-view:focus-visible {
+  outline: 2px solid var(--terra-light);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.route-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* The View-route action is an <a>, not a <button>; centre its label
+   vertically so it matches the Cancel button's height. */
+.route-modal-actions .share-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 480px) {
+  .route-modal { width: 92vw; }
+  .route-leg-cost { font-size: 1.55rem; }
+  .route-leg-label { font-size: 0.88rem; }
+}
+
 .share-url {
   display: block;
   width: 100%;
